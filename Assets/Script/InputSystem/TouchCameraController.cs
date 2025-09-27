@@ -18,7 +18,11 @@ public class TouchCameraController : MonoBehaviour
     public float horizontalRotationLerpSpeed = 0f;
     [Tooltip("垂直旋转插值速度")]
     public float verticalRotationLerpSpeed = 0f;
-
+    [Tooltip("最大Pitch角度")]
+    public float maxPitch = 85f;
+    [Tooltip("最小Pitch角度")]
+    public float minPitch = 5f;
+    
     [Header("缩放设置")]
     [Tooltip("最小摄像机距离")]
     public float minCameraDistance = 1f;
@@ -227,7 +231,7 @@ public class TouchCameraController : MonoBehaviour
 
         // 应用旋转限制（防止过度翻转）
         targetYaw += horizontalDelta;
-        targetPitch = Mathf.Clamp(targetPitch + verticalDelta, 5f, 85f);
+        targetPitch = Mathf.Clamp(targetPitch + verticalDelta, minPitch, maxPitch);
     }
 
     // 处理缩放（绑定到双指缩放事件）
