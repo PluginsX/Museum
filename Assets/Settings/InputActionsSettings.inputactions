@@ -17,12 +17,12 @@
                 },
                 {
                     "name": "Turn",
-                    "type": "Value",
+                    "type": "Button",
                     "id": "ebf50695-ea34-4e2a-90cc-76309bf4dfe1",
-                    "expectedControlType": "Vector2",
+                    "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
-                    "initialStateCheck": true
+                    "initialStateCheck": false
                 },
                 {
                     "name": "Move",
@@ -69,18 +69,7 @@
                 {
                     "name": "",
                     "id": "166f96a4-1435-45df-9dec-5221c79f70e4",
-                    "path": "{<Mouse>/position} when <Mouse>/leftButton.isPressed",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Turn",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "ae7fe0ba-3ef8-4d4c-b08c-84cdf9b1b1b9",
-                    "path": "<Touchscreen>/primaryTouch/position",
+                    "path": "<Mouse>/leftButton",
                     "interactions": "",
                     "processors": "",
                     "groups": "",

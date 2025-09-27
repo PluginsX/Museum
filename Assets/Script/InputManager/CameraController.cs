@@ -78,9 +78,8 @@ public class CameraController : MonoBehaviour
         // 默认距离
         currentDistance = camDistance;
         targetDistance = camDistance;
-        // 摄像机朝向
-        Vector3 directionToTarget = targetObject.transform.position - mainCamera.transform.position;
-        Quaternion initialRotation = Quaternion.LookRotation(directionToTarget);
+        // 获取摄像机启动旋转角度
+        Quaternion initialRotation = mainCamera.transform.rotation;
         // 当前角度
         currentYaw = initialRotation.eulerAngles.y;
         currentPitch = initialRotation.eulerAngles.x;

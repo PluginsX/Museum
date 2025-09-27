@@ -122,6 +122,8 @@ public class InputHandler : MonoBehaviour
         if (TurnAction != null)
         {
             TurnAction.Enable();
+            TurnAction.performed += OnTurnPerformed;
+            TurnAction.canceled += OnTurnCanceled;
         }
 
         if (ScaleAction != null)
@@ -150,6 +152,8 @@ public class InputHandler : MonoBehaviour
 
         if (TurnAction != null)
         {
+            TurnAction.performed -= OnTurnPerformed;
+            TurnAction.canceled -= OnTurnCanceled;
             TurnAction.Disable();
         }
 
@@ -265,6 +269,43 @@ public class InputHandler : MonoBehaviour
         if (debugMode) Debug.Log("平移结束");
     }
 
+    private void OnTurnPerformed(InputAction.CallbackContext context)
+    {
+        OnLeftPress = true;
+
+        Vector2 position = Mouse.current.position.ReadValue();
+        // 记录鼠标位置
+        Last_Mouse_L_Pos = position;
+        // 点击开始Time
+        clickStartTime = Time.time;
+
+        clickRegistered = false;
+
+        if (debugMode) Debug.Log($"点击开始: {position}");
+    }
+
+    private void OnTurnCanceled(InputAction.CallbackContext context)
+    {
+        OnLeftPress = false;
+        
+        Vector2 position = Mouse.current.position.ReadValue();
+        float clickDuration = Time.time - clickStartTime;
+        float clickDistance = Vector2.Distance(Last_Mouse_L_Pos, position);
+
+        //Last_Mouse_L_Pos = new Vector2(0,0);
+
+        // 检查是否满足单击条件
+        if (clickDuration <= maxClickTime && clickDistance <= maxClickDistance && !clickRegistered)
+        {
+            onSingleClick.Invoke(position);
+            clickRegistered = true;
+            if (debugMode) Debug.Log($"触发单击: {position}");
+        }
+
+        if (debugMode) Debug.Log($"点击结束: {position}");
+    }
+
+
     private void HandleTouchInput()
     {
         // 检查是否有触摸屏
@@ -274,7 +315,7 @@ public class InputHandler : MonoBehaviour
         // 获取所有触摸控制点
         var touches = Touchscreen.current.touches;
         int activeTouches = 0;
-        
+
         // 统计活跃触摸点数量
         foreach (var touch in touches)
         {
@@ -291,7 +332,7 @@ public class InputHandler : MonoBehaviour
                 {
                     // 获取触摸ID
                     int currentTouchId = touch.touchId.ReadValue();
-                    
+
                     if (primaryTouchId == -1)
                     {
                         // 新的触摸开始
@@ -302,7 +343,7 @@ public class InputHandler : MonoBehaviour
                         clickStartTime = Time.time;
                         clickRegistered = false;
                         OnLeftPress = true;
-                        
+
                         if (debugMode) Debug.Log($"触摸开始: {primaryTouchStartPos}, ID: {primaryTouchId}");
                     }
                     else if (currentTouchId == primaryTouchId)
@@ -310,7 +351,7 @@ public class InputHandler : MonoBehaviour
                         // 正在进行的触摸
                         var phase = touch.phase.ReadValue();
                         var position = touch.position.ReadValue();
-                        
+
                         if (phase == UnityEngine.InputSystem.TouchPhase.Moved && OnLeftPress)
                         {
                             // 检查是否超过最小拖动距离
@@ -318,28 +359,28 @@ public class InputHandler : MonoBehaviour
                             {
                                 onRotate.Invoke(position, lastPosition);
                                 lastPosition = position;
-                                
+
                                 if (debugMode) Debug.Log($"触摸旋转: {position}");
                             }
                         }
-                        else if (phase == UnityEngine.InputSystem.TouchPhase.Ended || 
+                        else if (phase == UnityEngine.InputSystem.TouchPhase.Ended ||
                                  phase == UnityEngine.InputSystem.TouchPhase.Canceled)
                         {
                             // 触摸结束
                             OnLeftPress = false;
                             primaryTouchId = -1;
-                            
+
                             // 检查是否是单击
                             float clickDuration = Time.time - clickStartTime;
                             float clickDistance = Vector2.Distance(TouchStartPosition, position);
-                            
+
                             if (clickDuration <= maxClickTime && clickDistance <= maxClickDistance && !clickRegistered)
                             {
                                 onSingleClick.Invoke(position);
                                 clickRegistered = true;
                                 if (debugMode) Debug.Log($"触摸单击: {position}");
                             }
-                            
+
                             if (debugMode) Debug.Log($"触摸结束: {position}");
                         }
                     }
