@@ -7518,10 +7518,22 @@ MonoBehaviour:
   maxClickDistance: 20
   dragMinDistance: 2
   zoomMultiple: -1
-  onSingleClick:
+  OnClick:
     m_PersistentCalls:
-      m_Calls: []
-  onRotate:
+      m_Calls:
+      - m_Target: {fileID: 2115922876}
+        m_TargetAssemblyTypeName: CameraController, Assembly-CSharp
+        m_MethodName: OnClick
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+  OnRotate:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2115922876}
@@ -7536,7 +7548,7 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-  onScale:
+  OnScale:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2115922876}
@@ -7551,12 +7563,12 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-  onPan:
+  OnMove:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2115922876}
         m_TargetAssemblyTypeName: CameraController, Assembly-CSharp
-        m_MethodName: OnPan
+        m_MethodName: OnMove
         m_Mode: 0
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

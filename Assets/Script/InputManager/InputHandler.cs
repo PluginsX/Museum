@@ -37,29 +37,34 @@ public class InputHandler : MonoBehaviour
     public float zoomMultiple = -1f;
 
     [Header("事件绑定")]
-    public Vector2Event onSingleClick;             // 点击位置
-    public Vector2Vector2Event onRotate;           // 当前位置, 上一位置
-    public FloatEvent onScale;                     // 缩放因子
-    public Vector2Vector2Event onPan;              // 当前位置, 上一位置
+    public Vector2Event OnClick;                     // 点击位置
+    public Vector2Vector2Event OnRotate;             // 当前位置, 上一位置
+    public FloatEvent OnScale;                       // 缩放因子
+    public Vector2Vector2Event OnMove;               // 当前位置, 上一位置
 
     [Header("调试")]
     public bool debugMode = false;
 
     // 输入动作缓存
-    private InputAction clickAction;
+    private InputAction ClickAction;
     private InputAction TurnAction;
     private InputAction ScaleAction;
     private InputAction MoveAction;
 
     // 状态变量
-    private bool OnLeftPress = false;
+
+    private bool OnClickPress = false;
+    private bool OnTurnPress = false;
     private bool OnMiddlePress = false;
-    private Vector2 lastPosition;
-    private Vector2 Last_Mouse_L_Pos;
-    private Vector2 Last_Mouse_M_Pos;
+    private bool OnScaleActive = false;
+    private Vector2 Last_Click_Pos;
+    private Vector2 last_Touch_Pos;
+    private Vector2 Last_Turn_Pos;
+    private Vector2 Last_Move_Pos;
     private Vector2 TouchStartPosition;
     private float clickStartTime;
     private bool clickRegistered = false;
+    private bool UserInputMode = false; // True 为触摸，Flase 为鼠标
 
     // 触摸相关变量
     private int primaryTouchId = -1;
@@ -76,20 +81,20 @@ public class InputHandler : MonoBehaviour
             // 查找所有动作地图中的动作
             foreach (var map in inputActionAsset.actionMaps)
             {
-                if (clickAction == null)
-                    clickAction = map.FindAction(clickActionName, false);
-                
+                if (ClickAction == null)
+                    ClickAction = map.FindAction(clickActionName, false);
+
                 if (TurnAction == null)
                     TurnAction = map.FindAction(TurnActionName, false);
-                
+
                 if (ScaleAction == null)
                     ScaleAction = map.FindAction(ScaleActionName, false);
-                
+
                 if (MoveAction == null)
                     MoveAction = map.FindAction(MoveActionName, false);
 
                 // 所有动作都找到后停止查找
-                if (clickAction != null && TurnAction != null && 
+                if (ClickAction != null && TurnAction != null &&
                     ScaleAction != null && MoveAction != null)
                     break;
             }
@@ -97,7 +102,7 @@ public class InputHandler : MonoBehaviour
             // 调试信息
             if (debugMode)
             {
-                if (clickAction == null) Debug.LogWarning($"未找到名为 {clickActionName} 的动作");
+                if (ClickAction == null) Debug.LogWarning($"未找到名为 {clickActionName} 的动作");
                 if (TurnAction == null) Debug.LogWarning($"未找到名为 {TurnActionName} 的动作");
                 if (ScaleAction == null) Debug.LogWarning($"未找到名为 {ScaleActionName} 的动作");
                 if (MoveAction == null) Debug.LogWarning($"未找到名为 {MoveActionName} 的动作");
@@ -112,11 +117,11 @@ public class InputHandler : MonoBehaviour
     private void OnEnable()
     {
         // 启用输入动作并绑定回调
-        if (clickAction != null)
+        if (ClickAction != null)
         {
-            clickAction.Enable();
-            clickAction.performed += OnClickPerformed;
-            clickAction.canceled += OnClickCanceled;
+            ClickAction.Enable();
+            ClickAction.performed += OnClickPerformed;
+            ClickAction.canceled += OnClickCanceled;
         }
 
         if (TurnAction != null)
@@ -130,24 +135,25 @@ public class InputHandler : MonoBehaviour
         {
             ScaleAction.Enable();
             ScaleAction.performed += OnScrollPerformed;
+            ScaleAction.canceled += OnScrollCanceled;
         }
 
         if (MoveAction != null)
         {
             MoveAction.Enable();
-            MoveAction.performed += OnPanPerformed;
-            MoveAction.canceled += OnPanCanceled;
+            MoveAction.performed += OnMovePerformed;
+            MoveAction.canceled += OnMoveCanceled;
         }
     }
 
     private void OnDisable()
     {
         // 禁用输入动作并解绑回调
-        if (clickAction != null)
+        if (ClickAction != null)
         {
-            clickAction.performed -= OnClickPerformed;
-            clickAction.canceled -= OnClickCanceled;
-            clickAction.Disable();
+            ClickAction.performed -= OnClickPerformed;
+            ClickAction.canceled -= OnClickCanceled;
+            ClickAction.Disable();
         }
 
         if (TurnAction != null)
@@ -160,54 +166,25 @@ public class InputHandler : MonoBehaviour
         if (ScaleAction != null)
         {
             ScaleAction.performed -= OnScrollPerformed;
+            ScaleAction.canceled -= OnScrollCanceled;
             ScaleAction.Disable();
         }
 
         if (MoveAction != null)
         {
-            MoveAction.performed -= OnPanPerformed;
-            MoveAction.canceled -= OnPanCanceled;
+            MoveAction.performed -= OnMovePerformed;
+            MoveAction.canceled -= OnMoveCanceled;
             MoveAction.Disable();
         }
     }
 
-    private void Update()
-    {
-        // 处理旋转
-        if (OnLeftPress && TurnAction != null)
-        {
-            Vector2 currentPosition = Mouse.current.position.ReadValue();
-            if (currentPosition != Last_Mouse_L_Pos)
-            {
-                onRotate.Invoke(currentPosition, Last_Mouse_L_Pos);
-                if (debugMode) Debug.Log($"旋转: {currentPosition} -> {Last_Mouse_L_Pos}");
-                Last_Mouse_L_Pos = currentPosition;
-            }
-        }
-
-        // 处理平移
-        if (OnMiddlePress && MoveAction != null)
-        {
-            Vector2 currentPosition = Mouse.current.position.ReadValue();
-            if (currentPosition != Last_Mouse_M_Pos)
-            {
-                onPan.Invoke(currentPosition, Last_Mouse_M_Pos);
-                if (debugMode) Debug.Log($"平移: {currentPosition} -> {Last_Mouse_M_Pos}");
-                Last_Mouse_M_Pos = currentPosition;
-            }
-        }
-
-        // 处理触摸输入
-        HandleTouchInput();
-    }
-
     private void OnClickPerformed(InputAction.CallbackContext context)
     {
-        OnLeftPress = true;
+        OnClickPress = true;
 
         Vector2 position = Mouse.current.position.ReadValue();
         // 记录鼠标位置
-        Last_Mouse_L_Pos = position;
+        Last_Click_Pos = position;
         // 点击开始Time
         clickStartTime = Time.time;
 
@@ -218,18 +195,18 @@ public class InputHandler : MonoBehaviour
 
     private void OnClickCanceled(InputAction.CallbackContext context)
     {
-        OnLeftPress = false;
-        
+        OnClickPress = false;
+
         Vector2 position = Mouse.current.position.ReadValue();
         float clickDuration = Time.time - clickStartTime;
-        float clickDistance = Vector2.Distance(Last_Mouse_L_Pos, position);
+        float clickDistance = Vector2.Distance(Last_Click_Pos, position);
 
-        //Last_Mouse_L_Pos = new Vector2(0,0);
+        //Last_Click_Pos = new Vector2(0,0);
 
         // 检查是否满足单击条件
         if (clickDuration <= maxClickTime && clickDistance <= maxClickDistance && !clickRegistered)
         {
-            onSingleClick.Invoke(position);
+            OnClick.Invoke(position);
             clickRegistered = true;
             if (debugMode) Debug.Log($"触发单击: {position}");
         }
@@ -239,73 +216,86 @@ public class InputHandler : MonoBehaviour
 
     private void OnScrollPerformed(InputAction.CallbackContext context)
     {
+        OnScaleActive = true;
+
         float scrollValue = context.ReadValue<float>();
         // 忽略Axis的大小只取正负
         float Direction = scrollValue / Mathf.Abs(scrollValue);
         // 乘以缩放因子
         float scaleFactor = Direction * zoomMultiple;
-        onScale.Invoke(scaleFactor);
-        
-        if (debugMode) Debug.Log($"缩放: {scaleFactor}");
-    }
+        OnScale.Invoke(scaleFactor);
 
-    private void OnPanPerformed(InputAction.CallbackContext context)
+        if (debugMode) Debug.Log($"缩放开始: {scaleFactor}");
+    }
+    private void OnScrollCanceled(InputAction.CallbackContext context)
+    {
+        OnScaleActive = false;
+
+        float scrollValue = context.ReadValue<float>();
+        // 忽略Axis的大小只取正负
+        float Direction = scrollValue / Mathf.Abs(scrollValue);
+        // 乘以缩放因子
+        float scaleFactor = Direction * zoomMultiple;
+
+        if (debugMode) Debug.Log($"缩放结束: {scaleFactor}");
+    }
+    private void OnMovePerformed(InputAction.CallbackContext context)
     {
         OnMiddlePress = true;
 
         // 更新中键按下时的光标位置
-        Last_Mouse_M_Pos = Mouse.current.position.ReadValue();
+        Last_Move_Pos = Mouse.current.position.ReadValue();
 
         if (debugMode) Debug.Log("平移开始");
     }
 
-    private void OnPanCanceled(InputAction.CallbackContext context)
+    private void OnMoveCanceled(InputAction.CallbackContext context)
     {
         OnMiddlePress = false;
 
         // 更新中键松开时的光标位置
-        //Last_Mouse_M_Pos = new Vector2(0,0);
+        //Last_Move_Pos = new Vector2(0,0);
 
         if (debugMode) Debug.Log("平移结束");
     }
 
     private void OnTurnPerformed(InputAction.CallbackContext context)
     {
-        OnLeftPress = true;
+        OnTurnPress = true;
 
         Vector2 position = Mouse.current.position.ReadValue();
         // 记录鼠标位置
-        Last_Mouse_L_Pos = position;
+        Last_Turn_Pos = position;
         // 点击开始Time
         clickStartTime = Time.time;
 
         clickRegistered = false;
 
-        if (debugMode) Debug.Log($"点击开始: {position}");
+        if (debugMode) Debug.Log($"旋转开始: {position}");
     }
 
     private void OnTurnCanceled(InputAction.CallbackContext context)
     {
-        OnLeftPress = false;
-        
+        OnTurnPress = false;
+
         Vector2 position = Mouse.current.position.ReadValue();
         float clickDuration = Time.time - clickStartTime;
-        float clickDistance = Vector2.Distance(Last_Mouse_L_Pos, position);
+        float clickDistance = Vector2.Distance(Last_Turn_Pos, position);
 
-        //Last_Mouse_L_Pos = new Vector2(0,0);
+        //Last_Turn_Pos = new Vector2(0,0);
 
         // 检查是否满足单击条件
         if (clickDuration <= maxClickTime && clickDistance <= maxClickDistance && !clickRegistered)
         {
-            onSingleClick.Invoke(position);
+            OnClick.Invoke(position);
             clickRegistered = true;
             if (debugMode) Debug.Log($"触发单击: {position}");
         }
 
-        if (debugMode) Debug.Log($"点击结束: {position}");
+        if (debugMode) Debug.Log($"旋转结束: {position}");
     }
 
-
+    // 处理触控输入
     private void HandleTouchInput()
     {
         // 检查是否有触摸屏
@@ -338,11 +328,11 @@ public class InputHandler : MonoBehaviour
                         // 新的触摸开始
                         primaryTouchId = currentTouchId;
                         primaryTouchStartPos = touch.position.ReadValue();
-                        lastPosition = primaryTouchStartPos;
+                        last_Touch_Pos = primaryTouchStartPos;
                         TouchStartPosition = primaryTouchStartPos;
                         clickStartTime = Time.time;
                         clickRegistered = false;
-                        OnLeftPress = true;
+                        OnTurnPress = true;
 
                         if (debugMode) Debug.Log($"触摸开始: {primaryTouchStartPos}, ID: {primaryTouchId}");
                     }
@@ -352,13 +342,13 @@ public class InputHandler : MonoBehaviour
                         var phase = touch.phase.ReadValue();
                         var position = touch.position.ReadValue();
 
-                        if (phase == UnityEngine.InputSystem.TouchPhase.Moved && OnLeftPress)
+                        if (phase == UnityEngine.InputSystem.TouchPhase.Moved && OnTurnPress)
                         {
                             // 检查是否超过最小拖动距离
                             if (Vector2.Distance(primaryTouchStartPos, position) > dragMinDistance)
                             {
-                                onRotate.Invoke(position, lastPosition);
-                                lastPosition = position;
+                                OnRotate.Invoke(last_Touch_Pos, position);
+                                last_Touch_Pos = position;
 
                                 if (debugMode) Debug.Log($"触摸旋转: {position}");
                             }
@@ -367,7 +357,7 @@ public class InputHandler : MonoBehaviour
                                  phase == UnityEngine.InputSystem.TouchPhase.Canceled)
                         {
                             // 触摸结束
-                            OnLeftPress = false;
+                            OnTurnPress = false;
                             primaryTouchId = -1;
 
                             // 检查是否是单击
@@ -376,7 +366,7 @@ public class InputHandler : MonoBehaviour
 
                             if (clickDuration <= maxClickTime && clickDistance <= maxClickDistance && !clickRegistered)
                             {
-                                onSingleClick.Invoke(position);
+                                OnClick.Invoke(position);
                                 clickRegistered = true;
                                 if (debugMode) Debug.Log($"触摸单击: {position}");
                             }
@@ -429,7 +419,7 @@ public class InputHandler : MonoBehaviour
                         touch1.position.ReadValue() +
                         touch2.position.ReadValue()
                     ) / 2f;
-                    lastPosition = initialTouchMidpoint;
+                    last_Touch_Pos = initialTouchMidpoint;
 
                     if (debugMode) Debug.Log($"双指触摸开始: ID1={primaryTouchId}, ID2={secondaryTouchId}");
                 }
@@ -446,18 +436,18 @@ public class InputHandler : MonoBehaviour
                     float DeltaDistance = currentDistance - initialTouchDistance;
                     float scaleFactor = DeltaDistance > 0 ? 1 : (DeltaDistance < 0 ? -1 : 0);
                     // 触发缩放事件
-                    onScale.Invoke(scaleFactor);
+                    OnScale.Invoke(scaleFactor);
                     if (debugMode) Debug.Log($"触摸:双指缩放: {scaleFactor}");
                     // 更新双指间距
                     initialTouchDistance = currentDistance;
 
                     // 处理平移
-                    if (currentMidpoint != lastPosition)
+                    if (currentMidpoint != last_Touch_Pos)
                     {
-                        onPan.Invoke(currentMidpoint, lastPosition);
-                        lastPosition = currentMidpoint;
+                        OnMove.Invoke(last_Touch_Pos, currentMidpoint);
+                        last_Touch_Pos = currentMidpoint;
 
-                        if (debugMode) Debug.Log($"触摸:双指平移: {currentMidpoint}");
+                        if (debugMode) Debug.Log($"触摸:双指平移: {last_Touch_Pos}->{currentMidpoint}");
                     }
                 }
             }
@@ -467,7 +457,78 @@ public class InputHandler : MonoBehaviour
             // 重置触摸状态
             primaryTouchId = -1;
             secondaryTouchId = -1;
-            OnLeftPress = false;
+            OnTurnPress = false;
         }
     }
+    // 处理鼠标输入
+    private void HandleMouseInput()
+    {
+        // 处理旋转
+        if (OnTurnPress)
+        {
+            Vector2 currentPosition = Mouse.current.position.ReadValue();
+            if (currentPosition != Last_Turn_Pos)
+            {
+                OnRotate.Invoke(Last_Turn_Pos, currentPosition);
+                if (debugMode) Debug.Log($"持续旋转: {Last_Turn_Pos} -> {currentPosition}");
+                // 更新上一次位置
+                Last_Turn_Pos = currentPosition;
+            }
+        }
+
+        // 处理平移
+        if (OnMiddlePress)
+        {
+            Vector2 currentPosition = Mouse.current.position.ReadValue();
+            if (currentPosition != Last_Move_Pos)
+            {
+                OnMove.Invoke(Last_Move_Pos, currentPosition);
+                if (debugMode) Debug.Log($"持续平移: {Last_Move_Pos} -> {currentPosition}");
+                // 更新上一次位置
+                Last_Move_Pos = currentPosition;
+            }
+        }
+    }
+
+    // 检查触摸是否开始（用于快速切换输入模式）
+    private bool CheckInputMode()
+    {
+        bool TouchActive = false;
+        if (Touchscreen.current != null)
+        {
+            foreach (var touch in Touchscreen.current.touches)
+            {
+                if (touch.isInProgress && touch.phase.ReadValue() == UnityEngine.InputSystem.TouchPhase.Began)
+                {
+                    TouchActive = true;
+                    break;
+                }
+            }
+        }
+        return TouchActive;
+    }
+
+    private void Update()
+    {
+        // 输入模式切换
+        bool CurrentInputMode = CheckInputMode();
+        if (debugMode && UserInputMode != CurrentInputMode)
+            Debug.Log("输入模式切换为: " + (CurrentInputMode ? "触控" : "鼠标"));
+        UserInputMode = CurrentInputMode;
+        
+        // 根据当前输入类型处理（触摸优先）
+        if (UserInputMode)
+        {
+            // 触摸活跃时只处理触摸输入
+            HandleTouchInput();
+        }
+        else
+        {
+            // 触摸不活跃时处理鼠标输入
+            HandleMouseInput();
+        }
+    }
+    
+    
 }
+

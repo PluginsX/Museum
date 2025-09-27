@@ -119,7 +119,7 @@ public class CameraController : MonoBehaviour
 
     // 处理旋转事件（对应InputHandler的onRotate事件）
     // 绑定到：InputHandler.onRotate
-    public void OnRotate(Vector2 currentPos, Vector2 lastPos)
+    public void OnRotate(Vector2 lastPos, Vector2 currentPos)
     {
         if (debugMode) Debug.Log($"接收旋转输入: {currentPos} -> {lastPos}");
         
@@ -135,7 +135,7 @@ public class CameraController : MonoBehaviour
 
     // 处理平移事件（对应InputHandler的onPan事件）
     // 绑定到：InputHandler.onPan
-    public void OnPan(Vector2 currentPos, Vector2 lastPos)
+    public void OnMove(Vector2 lastPos, Vector2 currentPos)
     {
         if (debugMode) Debug.Log($"接收平移输入: {currentPos} -> {lastPos}");
 
@@ -190,7 +190,7 @@ public class CameraController : MonoBehaviour
 
     // 处理单击事件（可选：如需单击目标功能可启用）
     // 绑定到：InputHandler.onSingleClick（可选）
-    public void OnSingleClick(Vector2 clickPosition)
+    public void OnClick(Vector2 clickPosition)
     {
         if (debugMode) Debug.Log($"接收单击: {clickPosition}");
         
@@ -203,7 +203,7 @@ public class CameraController : MonoBehaviour
     }
 
     // 重置摄像机到初始状态
-    public void ResetToDefault()
+    public void ResetCamera()
     {
         targetYaw = defaultCameraRotation.eulerAngles.y;
         targetPitch = defaultCameraRotation.eulerAngles.x;
