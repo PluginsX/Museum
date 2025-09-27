@@ -180,10 +180,11 @@ public class CameraController : MonoBehaviour
     public void OnScale(float scaleFactor)
     {
         if (debugMode) Debug.Log($"接收缩放输入: {scaleFactor}");
-
-        float Direction = scaleFactor / Mathf.Abs(scaleFactor);
+        if(scaleFactor==0)
+            return;
+        
         // 根据缩放因子调整距离（乘以步长比例控制缩放幅度）
-        float newDistance = currentDistance *(1+(Direction * zoomStepRatio));
+        float newDistance = currentDistance *(1+(scaleFactor * zoomStepRatio));
         // 更新目标距离(缩放)，并加以安全范围限制
         targetDistance = Mathf.Clamp(newDistance, minCameraDistance, maxCameraDistance);
     }

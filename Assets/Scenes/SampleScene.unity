@@ -6237,6 +6237,7 @@ GameObject:
   - component: {fileID: 917105185}
   - component: {fileID: 917105187}
   - component: {fileID: 917105186}
+  - component: {fileID: 917105188}
   m_Layer: 5
   m_Name: Text (TMP)
   m_TagString: Untagged
@@ -6258,11 +6259,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1118944498}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 350, y: 50}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 588.50006, y: -5}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0}
 --- !u!114 &917105186
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6283,7 +6284,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u897F\u5468\uFF1A\u5377\u4F53\u5914\u7EB9\u87E0\u9F99\u76D6\u94DC\u7F4D"
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: dd9710fd76705674eaaa502e5b0e3115, type: 2}
   m_sharedMaterial: {fileID: -5264747872584942565, guid: dd9710fd76705674eaaa502e5b0e3115,
@@ -6329,7 +6330,7 @@ MonoBehaviour:
   m_charWidthMaxAdj: 0
   m_enableWordWrapping: 1
   m_wordWrappingRatios: 0.4
-  m_overflowMode: 0
+  m_overflowMode: 1
   m_linkedTextComponent: {fileID: 0}
   parentLinkedComponent: {fileID: 0}
   m_enableKerning: 1
@@ -6361,6 +6362,20 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 917105184}
   m_CullTransparentMesh: 1
+--- !u!114 &917105188
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 917105184}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_HorizontalFit: 2
+  m_VerticalFit: 2
 --- !u!1 &934641869
 GameObject:
   m_ObjectHideFlags: 0
@@ -6608,6 +6623,8 @@ GameObject:
   - component: {fileID: 1118944498}
   - component: {fileID: 1118944501}
   - component: {fileID: 1118944500}
+  - component: {fileID: 1118944503}
+  - component: {fileID: 1118944502}
   m_Layer: 5
   m_Name: InputRange
   m_TagString: Untagged
@@ -6630,11 +6647,11 @@ RectTransform:
   - {fileID: 917105185}
   m_Father: {fileID: 752520891}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0}
-  m_AnchorMax: {x: 0.5, y: 0}
-  m_AnchoredPosition: {x: 0, y: 50}
-  m_SizeDelta: {x: 350, y: 50}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0}
 --- !u!114 &1118944500
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6673,6 +6690,46 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1118944497}
   m_CullTransparentMesh: 0
+--- !u!114 &1118944502
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1118944497}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Padding:
+    m_Left: 0
+    m_Right: 0
+    m_Top: 0
+    m_Bottom: 0
+  m_ChildAlignment: 4
+  m_Spacing: 0
+  m_ChildForceExpandWidth: 0
+  m_ChildForceExpandHeight: 0
+  m_ChildControlWidth: 1
+  m_ChildControlHeight: 1
+  m_ChildScaleWidth: 0
+  m_ChildScaleHeight: 0
+  m_ReverseArrangement: 0
+--- !u!114 &1118944503
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1118944497}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_HorizontalFit: 0
+  m_VerticalFit: 2
 --- !u!1 &1127944803 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 613335749675440267, guid: 3d4b8be0a77f43945b536cefd4063f06,
@@ -7579,6 +7636,7 @@ MonoBehaviour:
           m_BoolArgument: 0
         m_CallState: 2
   debugMode: 1
+  DebugOutputUI: {fileID: 917105186}
 --- !u!4 &2115922875
 Transform:
   m_ObjectHideFlags: 0

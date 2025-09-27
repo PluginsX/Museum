@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
+using TMPro;
 
 [System.Serializable]
 public class Vector2Event : UnityEvent<Vector2> { }
@@ -44,6 +45,7 @@ public class InputHandler : MonoBehaviour
 
     [Header("调试")]
     public bool debugMode = false;
+    public TextMeshProUGUI DebugOutputUI;
 
     // 输入动作缓存
     private InputAction ClickAction;
@@ -52,7 +54,7 @@ public class InputHandler : MonoBehaviour
     private InputAction MoveAction;
 
     // 状态变量
-
+    private DeviceType Device_Type;
     private bool OnClickPress = false;
     private bool OnTurnPress = false;
     private bool OnMiddlePress = false;
@@ -112,6 +114,10 @@ public class InputHandler : MonoBehaviour
         {
             Debug.LogWarning("未分配InputActionAsset,请拖拽你的输入动作资产到组件上");
         }
+
+
+        // 获取设备类型
+        Device_Type = SystemInfo.deviceType;
     }
 
     private void OnEnable()
@@ -144,6 +150,7 @@ public class InputHandler : MonoBehaviour
             MoveAction.performed += OnMovePerformed;
             MoveAction.canceled += OnMoveCanceled;
         }
+
     }
 
     private void OnDisable()
@@ -298,9 +305,11 @@ public class InputHandler : MonoBehaviour
     // 处理触控输入
     private void HandleTouchInput()
     {
+        if (debugMode) Debug.Log("正在处理触摸输入");
         // 检查是否有触摸屏
-        if (Touchscreen.current == null)
-            return;
+        // if (Touchscreen.current == null)
+        //     Debug.Log("没有检测到触摸屏");
+        //     return;
 
         // 获取所有触摸控制点
         var touches = Touchscreen.current.touches;
@@ -312,7 +321,6 @@ public class InputHandler : MonoBehaviour
             if (touch.isInProgress)
                 activeTouches++;
         }
-
         // 单指触摸 - 旋转
         if (activeTouches == 1)
         {
@@ -322,7 +330,6 @@ public class InputHandler : MonoBehaviour
                 {
                     // 获取触摸ID
                     int currentTouchId = touch.touchId.ReadValue();
-
                     if (primaryTouchId == -1)
                     {
                         // 新的触摸开始
@@ -434,10 +441,11 @@ public class InputHandler : MonoBehaviour
 
                     // 处理缩放
                     float DeltaDistance = currentDistance - initialTouchDistance;
-                    float scaleFactor = DeltaDistance > 0 ? 1 : (DeltaDistance < 0 ? -1 : 0);
+                    float scaleFactor = DeltaDistance > 0 ? -1 : (DeltaDistance < 0 ? 1 : 0);
                     // 触发缩放事件
                     OnScale.Invoke(scaleFactor);
                     if (debugMode) Debug.Log($"触摸:双指缩放: {scaleFactor}");
+
                     // 更新双指间距
                     initialTouchDistance = currentDistance;
 
@@ -463,6 +471,7 @@ public class InputHandler : MonoBehaviour
     // 处理鼠标输入
     private void HandleMouseInput()
     {
+        if (debugMode) Debug.Log("正在处理鼠标输入");
         // 处理旋转
         if (OnTurnPress)
         {
@@ -493,27 +502,44 @@ public class InputHandler : MonoBehaviour
     // 检查触摸是否开始（用于快速切换输入模式）
     private bool CheckInputMode()
     {
-        bool TouchActive = false;
-        if (Touchscreen.current != null)
+        // 1. 检查当前是否有可用的触摸屏设备
+        if (Touchscreen.current == null)
+            return false;
+
+        // 2. 遍历所有可能的触摸点
+        for (int i = 0; i < Touchscreen.current.touches.Count; i++)
         {
-            foreach (var touch in Touchscreen.current.touches)
+            TouchControl touch = Touchscreen.current.touches[i];
+            // 3. 检查该触摸点是否被按下（活跃）
+            if (touch.press.isPressed)
             {
-                if (touch.isInProgress && touch.phase.ReadValue() == UnityEngine.InputSystem.TouchPhase.Began)
-                {
-                    TouchActive = true;
-                    break;
-                }
+                return true;
             }
         }
-        return TouchActive;
+
+        return false;
     }
+
+
 
     private void Update()
     {
-        // 输入模式切换
+
+        // 调试信息输出到UI
+        DebugOutputUI.text = "设备类型: "+Device_Type.ToString()+"\t|\t输入模式: " + (UserInputMode ? "触控" : "鼠标");
+
+        // 输入模式检查与切换
         bool CurrentInputMode = CheckInputMode();
-        if (debugMode && UserInputMode != CurrentInputMode)
+        if (debugMode && UserInputMode != CurrentInputMode){
+            if(CurrentInputMode){
+                // 切换到鼠标模式时，重置触控默认值
+                primaryTouchId = -1;
+                secondaryTouchId = -1;
+                OnTurnPress = false;
+            }
             Debug.Log("输入模式切换为: " + (CurrentInputMode ? "触控" : "鼠标"));
+        }
+        // 更新输入模式
         UserInputMode = CurrentInputMode;
         
         // 根据当前输入类型处理（触摸优先）
