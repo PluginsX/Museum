@@ -72,6 +72,8 @@ public class PBRPainterWindow : EditorWindow
     private float brushSize = 0.1f;
     private float brushHardness = 1.0f;
     private Texture2D brushMask;
+    private float brushSpacing = 0.1f; // 笔刷间距（单位：米）
+    private Vector3 lastPaintPosition = Vector3.one * float.MaxValue; // 上次绘制位置
     
     private int selectedLayerIndex = -1;
     private string selectedMapName = "";
@@ -91,7 +93,10 @@ public class PBRPainterWindow : EditorWindow
         isUsingURP = GraphicsSettings.currentRenderPipeline != null && 
                     GraphicsSettings.currentRenderPipeline.GetType().Name.Contains("Universal");
         SceneView.duringSceneGui += OnSceneGUI;
-        InitializeStyles();
+        
+        // 延迟一帧初始化样式，确保EditorStyles可用
+        EditorApplication.delayCall += InitializeStyles;
+        lastPaintPosition = Vector3.one * float.MaxValue; // 新增初始化
     }
 
     // 窗口关闭时自动清理
@@ -123,6 +128,14 @@ public class PBRPainterWindow : EditorWindow
 
     private void InitializeStyles()
     {
+        // 安全检查：确保EditorStyles.helpBox已初始化
+        if (EditorStyles.helpBox == null)
+        {
+            // 如果仍未初始化，再延迟一帧
+            EditorApplication.delayCall += InitializeStyles;
+            return;
+        }
+
         defaultLayerStyle = new GUIStyle(EditorStyles.helpBox);
         defaultMapStyle = new GUIStyle(EditorStyles.label);
         
@@ -198,6 +211,7 @@ public class PBRPainterWindow : EditorWindow
                     EnsureLayersHaveTextures();
                     UpdateMaterialPreview();
                     SceneView.RepaintAll();
+                    lastPaintPosition = Vector3.one * float.MaxValue; // 新增重置
                 }
                 else
                 {
@@ -315,7 +329,16 @@ public class PBRPainterWindow : EditorWindow
             EditorGUILayout.ObjectField(baseMaterial, typeof(Material), false);
             GUI.enabled = true;
         }
-        
+        // 新增：纹理大小设置
+        EditorGUILayout.LabelField("纹理尺寸", GUILayout.Width(60));
+        int newTextureSize = EditorGUILayout.IntField(textureSize, GUILayout.Width(80));
+        // 确保纹理尺寸为2的幂且不小于32
+        if (newTextureSize != textureSize)
+        {
+            newTextureSize = Mathf.Max(32, newTextureSize);
+            newTextureSize = Mathf.NextPowerOfTwo(newTextureSize);
+            textureSize = newTextureSize;
+        }
         if (GUILayout.Button("合并所有材质层并导出"))
         {
             ExportMergedMaterial();
@@ -406,28 +429,37 @@ public class PBRPainterWindow : EditorWindow
         // 检测射线是否击中目标物体
         if (Physics.Raycast(worldRay, out RaycastHit hit) && hit.collider.gameObject == targetObject)
         {
-            // 绘制笔刷预览球体（旧版本稳定逻辑）
+            // 绘制笔刷预览球体
             float worldSize = brushSize * Mathf.Max(
                 targetMesh.bounds.extents.x, 
                 targetMesh.bounds.extents.y, 
                 targetMesh.bounds.extents.z);
             Handles.SphereHandleCap(0, hit.point, Quaternion.identity, worldSize, EventType.Repaint);
             
-            // 处理鼠标事件进行绘制（旧版本稳定逻辑）
+            // 处理鼠标事件进行绘制，添加间距判断
             if (!currentEvent.alt && !currentEvent.control && !currentEvent.shift)
             {
+                // 计算当前位置与上次绘制位置的距离
+                float distanceFromLast = Vector3.Distance(hit.point, lastPaintPosition);
+                
                 if (currentEvent.type == EventType.MouseDown && currentEvent.button == 0)
                 {
                     isMouseDragging = true;
                     PaintOnTexture(hit);
+                    lastPaintPosition = hit.point; // 更新上次绘制位置
                     currentEvent.Use();
                     sceneView.Repaint();
                 }
                 else if (currentEvent.type == EventType.MouseDrag && currentEvent.button == 0 && isMouseDragging)
                 {
-                    PaintOnTexture(hit);
-                    currentEvent.Use();
-                    sceneView.Repaint();
+                    // 只有当距离超过设定的间距或间距为0时才绘制
+                    if (distanceFromLast >= brushSpacing || brushSpacing <= 0)
+                    {
+                        PaintOnTexture(hit);
+                        lastPaintPosition = hit.point; // 更新上次绘制位置
+                        currentEvent.Use();
+                        sceneView.Repaint();
+                    }
                 }
             }
             else
@@ -436,10 +468,11 @@ public class PBRPainterWindow : EditorWindow
             }
         }
         
-        // 鼠标抬起时重置拖拽状态
+        // 鼠标抬起时重置拖拽状态和上次位置
         if (currentEvent.type == EventType.MouseUp)
         {
             isMouseDragging = false;
+            lastPaintPosition = Vector3.one * float.MaxValue; // 重置为初始值
         }
     }
 
@@ -630,6 +663,7 @@ public class PBRPainterWindow : EditorWindow
         EditorGUILayout.Space();
     }
 
+    // 1. 修复DrawLayerParameters中的按钮逻辑，确保状态正确切换
     private void DrawLayerParameters(int layerIndex, MaterialLayer layer)
     {
         if (layer == null) return;
@@ -642,17 +676,16 @@ public class PBRPainterWindow : EditorWindow
                 
                 GUILayout.BeginHorizontal();
                 {
-                    // 左侧元素 - 靠左排列
-                    GUILayout.Label("孤立", GUILayout.Width(40)); // 固定文字宽度
-                    entry.isolateThisMap = EditorGUILayout.Toggle(entry.isolateThisMap, GUILayout.Width(20)); // 仅复选框宽度
+                    // 左侧元素
+                    GUILayout.Label("孤立", GUILayout.Width(40));
+                    entry.isolateThisMap = EditorGUILayout.Toggle(entry.isolateThisMap, GUILayout.Width(20));
                     
                     string displayName = entry.mapName.StartsWith("_") ? entry.mapName.Substring(1) : entry.mapName;
                     EditorGUILayout.LabelField($"{displayName}", mapStyle, GUILayout.Width(150));
                     
-                    // 弹性空间分隔左右
                     GUILayout.FlexibleSpace();
                     
-                    // 右侧元素 - 靠右排列
+                    // 右侧元素
                     Texture2D newSourceTexture = EditorGUILayout.ObjectField(
                         entry.textureData.sourceTexture, 
                         typeof(Texture2D), 
@@ -675,36 +708,45 @@ public class PBRPainterWindow : EditorWindow
                     string buttonText = entry.isPainting ? "绘制结束" : "绘制此图";
                     if (GUILayout.Button(buttonText, GUILayout.Width(80)))
                     {
-                        entry.isPainting = !entry.isPainting;
+                        // 关键修复：切换状态时强制更新选中的参数层
+                        bool newState = !entry.isPainting;
                         
-                        if (entry.isPainting)
+                        // 先重置所有参数层的绘制状态
+                        foreach (var l in materialLayers)
                         {
-                            foreach (var l in materialLayers)
+                            foreach (var e in l.textureMaps)
                             {
-                                foreach (var e in l.textureMaps)
-                                {
-                                    if (l != layer || e != entry)
-                                    {
-                                        e.isPainting = false;
-                                    }
-                                }
-                            }
-                            layer.isActive = true;
-                            selectedLayerIndex = layerIndex;
-                            selectedMapName = entry.mapName;
-                            
-                            // 处理孤立显示
-                            if (entry.isolateThisMap)
-                            {
-                                IsolateMapLayer(layerIndex, entry.mapName);
-                            }
-                            else
-                            {
-                                RestoreAllMapsVisibility();
+                                e.isPainting = false;
                             }
                         }
                         
+                        // 设置当前参数层状态
+                        entry.isPainting = newState;
+                        
+                        // 更新选中的图层和参数层
+                        selectedLayerIndex = layerIndex;
+                        selectedMapName = entry.mapName;
+                        
+                        // 激活当前材质层
+                        foreach (var l in materialLayers)
+                        {
+                            l.isActive = false;
+                        }
+                        layer.isActive = newState;
+                        
+                        // 处理孤立显示
+                        if (newState && entry.isolateThisMap)
+                        {
+                            IsolateMapLayer(layerIndex, entry.mapName);
+                        }
+                        else
+                        {
+                            RestoreAllMapsVisibility();
+                        }
+                        
                         UpdateMaterialPreview();
+                        // 强制刷新场景视图
+                        SceneView.RepaintAll();
                     }
                 }
                 GUILayout.EndHorizontal();
@@ -775,7 +817,9 @@ public class PBRPainterWindow : EditorWindow
         brushColor = EditorGUILayout.ColorField("画笔颜色", brushColor);
         brushSize = EditorGUILayout.Slider("画笔尺寸", brushSize, 0.01f, 1.0f);
         brushHardness = EditorGUILayout.Slider("画笔硬度", brushHardness, 0.01f, 1.0f);
-        brushMask = EditorGUILayout.ObjectField("画笔遮罩", brushMask, typeof(Texture2D), false) as Texture2D;
+        brushColor.a = EditorGUILayout.Slider("不透明度", brushColor.a, 0.01f, 1.0f);
+        brushSpacing = EditorGUILayout.Slider("笔刷间距", brushSpacing, 0.0f, 1.0f); 
+        brushMask = EditorGUILayout.ObjectField("笔刷遮罩", brushMask, typeof(Texture2D), false) as Texture2D;
         GUILayout.EndVertical();
     }
 
@@ -794,10 +838,23 @@ public class PBRPainterWindow : EditorWindow
             return;
             
         MaterialLayer layer = materialLayers[selectedLayerIndex];
-        var mapEntry = layer.textureMaps.FirstOrDefault(e => e.mapName == selectedMapName);
+        // 关键修复：优先使用isPainting为true的参数层作为绘制目标
+        var mapEntry = layer.textureMaps.FirstOrDefault(e => e.isPainting);
+        // 备选方案：如果没有激活的，使用选中的名称
         if (mapEntry == null)
+        {
+            mapEntry = layer.textureMaps.FirstOrDefault(e => e.mapName == selectedMapName);
+        }
+        
+        if (mapEntry == null)
+        {
+            Debug.LogWarning("未找到有效的绘制目标参数层");
             return;
-            
+        }
+        
+        // 更新选中的参数层名称（同步状态）
+        selectedMapName = mapEntry.mapName;
+        
         TextureData textureData = mapEntry.textureData;
         if (textureData.paintTexture == null)
         {
@@ -806,14 +863,9 @@ public class PBRPainterWindow : EditorWindow
             return;
         }
         
-        // 旧版本稳定UV获取逻辑：直接使用hit.textureCoord（已验证可正常映射）
         Vector2 uv = hit.textureCoord;
-        // 计算像素坐标（旧版本边界处理逻辑）
         int pixelX = Mathf.Clamp((int)(uv.x * textureData.paintTexture.width), 0, textureData.paintTexture.width - 1);
         int pixelY = Mathf.Clamp((int)(uv.y * textureData.paintTexture.height), 0, textureData.paintTexture.height - 1);
-        
-        // 调试输出（可选保留）
-        Debug.Log($"绘制位置: UV({uv.x:F2},{uv.y:F2}) 像素({pixelX},{pixelY})");
         
         if (currentPaintMode == PaintMode.Brush)
         {
@@ -852,32 +904,65 @@ public class PBRPainterWindow : EditorWindow
         }
     }
 
-    // ======================== 核心修改3：替换为旧版本可正常绘制的PaintWithBrush ========================
+    // 4. 添加缺失的ScaleTexture方法
+    private Texture2D ScaleTexture(Texture2D source, int width, int height)
+    {
+        Texture2D scaled = new Texture2D(width, height, source.format, false);
+        Color[] sourcePixels = source.GetPixels();
+        Color[] scaledPixels = new Color[width * height];
+        
+        float xRatio = (float)source.width / width;
+        float yRatio = (float)source.height / height;
+        
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int sourceX = Mathf.Min((int)(x * xRatio), source.width - 1);
+                int sourceY = Mathf.Min((int)(y * yRatio), source.height - 1);
+                scaledPixels[y * width + x] = sourcePixels[sourceY * source.width + sourceX];
+            }
+        }
+        
+        scaled.SetPixels(scaledPixels);
+        scaled.Apply();
+        return scaled;
+    }
+    
+    // 3. 完善PaintWithBrush方法（确保完整实现）
     private void PaintWithBrush(Texture2D texture, int centerX, int centerY)
     {
-        // 旧版本稳定笔刷计算逻辑：直接基于纹理宽度计算笔刷像素大小
-        int brushPixelSize = Mathf.Max(1, (int)(brushSize * texture.width));
-        // 获取笔刷遮罩（旧版本逻辑：优先使用自定义遮罩，否则创建默认圆形遮罩）
-        Texture2D mask = brushMask ?? CreateDefaultBrushMask(brushPixelSize, brushHardness);
+        if (texture == null) return;
         
-        // 遍历遮罩像素并绘制到纹理（旧版本逐像素绘制逻辑）
+        int brushPixelSize = Mathf.Max(1, (int)(brushSize * texture.width * 0.5f));
+        Texture2D mask = brushMask;
+        
+        // 创建或缩放遮罩
+        if (mask == null)
+        {
+            mask = CreateDefaultBrushMask(brushPixelSize, brushHardness);
+        }
+        else if (mask.width != brushPixelSize || mask.height != brushPixelSize)
+        {
+            mask = ScaleTexture(mask, brushPixelSize, brushPixelSize);
+        }
+        
+        // 锁定纹理以提高性能
+        texture.SetPixels32(texture.GetPixels32());
+        
+        // 绘制笔刷
         for (int y = 0; y < mask.height; y++)
         {
             for (int x = 0; x < mask.width; x++)
             {
-                // 计算目标纹理上的像素位置
                 int targetX = centerX - mask.width / 2 + x;
                 int targetY = centerY - mask.height / 2 + y;
                 
-                // 确保像素位置在纹理范围内
                 if (targetX >= 0 && targetX < texture.width && targetY >= 0 && targetY < texture.height)
                 {
-                    // 计算混合因子（结合遮罩alpha和画笔颜色alpha）
                     float alpha = mask.GetPixel(x, y).a * brushColor.a;
-                    
                     if (alpha > 0)
                     {
-                        // 混合原始颜色和画笔颜色（旧版本稳定插值逻辑）
                         Color originalColor = texture.GetPixel(targetX, targetY);
                         Color newColor = Color.Lerp(originalColor, brushColor, alpha);
                         texture.SetPixel(targetX, targetY, newColor);
@@ -886,15 +971,18 @@ public class PBRPainterWindow : EditorWindow
             }
         }
         
-        // 应用纹理修改（关键步骤，确保绘制生效）
         texture.Apply();
     }
+
 
     // 2. 添加遮罩缩放辅助方法（保留，避免自定义遮罩尺寸异常）
     private Texture2D ResizeMask(Texture2D source, int targetSize)
     {
         Texture2D resized = new Texture2D(targetSize, targetSize, TextureFormat.Alpha8, false);
+        resized.filterMode = FilterMode.Bilinear; // 双线性过滤，缩放后边缘更平滑
+        
         RenderTexture rt = RenderTexture.GetTemporary(targetSize, targetSize);
+        rt.filterMode = FilterMode.Bilinear;
         Graphics.Blit(source, rt);
         
         RenderTexture.active = rt;
