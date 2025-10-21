@@ -170,7 +170,8 @@ namespace PBRMaterialPainterTool
             EnsureInitialized();
             Graphics.Blit(src, workingTexture);
             // Ensure alpha becomes 1 after import (treat base as fully opaque contribution)
-            using (var temp = TempRT(textureSize))
+            var tempImport = TempRT(textureSize);
+            try
             {
                 var mat = PainterMaterials.CompositeMaskedMaterial;
                 mat.SetTexture("_UnderTex", workingTexture);
@@ -179,9 +180,13 @@ namespace PBRMaterialPainterTool
                 mat.SetColor("_Color", Color.clear); // color ignored when mask is white and we use underTex as both; force alpha to 1 below
                 // Force alpha to 1 by blending with white mask and setting color.a=1 in a dedicated pass
                 var prev = RenderTexture.active;
-                Graphics.Blit(workingTexture, temp, PainterMaterials.ForceAlphaOneMaterial);
-                Graphics.Blit(temp, workingTexture);
+                Graphics.Blit(workingTexture, tempImport, PainterMaterials.ForceAlphaOneMaterial);
+                Graphics.Blit(tempImport, workingTexture);
                 RenderTexture.active = prev;
+            }
+            finally
+            {
+                RenderTexture.ReleaseTemporary(tempImport);
             }
             baseTexture = src;
         }
@@ -189,7 +194,8 @@ namespace PBRMaterialPainterTool
         public void StampBrushAtUV(Vector2 uv, Color brushColor, float uvRadius, float hardness, Texture2D alphaMask, Vector4 channelMask)
         {
             EnsureInitialized();
-            using (var temp = TempRT(textureSize))
+            var tempStamp = TempRT(textureSize);
+            try
             {
                 var mat = PainterMaterials.BrushStampMaterial;
                 mat.SetTexture("_MainTex", workingTexture);
@@ -209,23 +215,32 @@ namespace PBRMaterialPainterTool
                 }
                 mat.SetVector("_ChannelMask", channelMask);
 
-                Graphics.Blit(workingTexture, temp, mat, 0);
-                Graphics.Blit(temp, workingTexture);
+                Graphics.Blit(workingTexture, tempStamp, mat, 0);
+                Graphics.Blit(tempStamp, workingTexture);
+            }
+            finally
+            {
+                RenderTexture.ReleaseTemporary(tempStamp);
             }
         }
 
         public void FillWhole(Color fillColor, Vector4 channelMask)
         {
             EnsureInitialized();
-            using (var temp = TempRT(textureSize))
+            var tempFill = TempRT(textureSize);
+            try
             {
                 var mat = PainterMaterials.CompositeMaskedMaterial;
                 mat.SetTexture("_UnderTex", workingTexture);
                 mat.SetTexture("_MaskTex", Texture2D.whiteTexture);
                 mat.SetColor("_Color", fillColor);
                 mat.SetVector("_ChannelMask", channelMask);
-                Graphics.Blit(null, temp, mat, 0);
-                Graphics.Blit(temp, workingTexture);
+                Graphics.Blit(null, tempFill, mat, 0);
+                Graphics.Blit(tempFill, workingTexture);
+            }
+            finally
+            {
+                RenderTexture.ReleaseTemporary(tempFill);
             }
         }
 
