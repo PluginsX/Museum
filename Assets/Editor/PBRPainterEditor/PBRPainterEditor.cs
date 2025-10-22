@@ -817,7 +817,7 @@ public class PBRPainterWindow : EditorWindow
         GUILayout.BeginVertical("box");
         brushColor = EditorGUILayout.ColorField("画笔颜色", brushColor);
         brushSize = EditorGUILayout.Slider("画笔尺寸", brushSize, 0.01f, 1.0f);
-        brushHardness = EditorGUILayout.Slider("画笔硬度", brushHardness, 0.01f, 1.0f);
+        brushHardness = EditorGUILayout.Slider("画笔硬度", brushHardness, 0.0f, 1.0f);
         brushColor.a = EditorGUILayout.Slider("不透明度", brushColor.a, 0.01f, 1.0f);
         brushSpacing = EditorGUILayout.Slider("笔刷间距", brushSpacing, 0.0f, 1.0f);
 
@@ -955,7 +955,7 @@ public class PBRPainterWindow : EditorWindow
     {
         if (texture == null) return;
         
-        int brushPixelSize = Mathf.Max(1, (int)(brushSize * texture.width * 0.5f));
+        int brushPixelSize = Mathf.Max(1, (int)(brushSize * texture.width * 0.25f));
         Texture2D mask = brushMask;
         
         // 创建或缩放遮罩
@@ -991,17 +991,20 @@ public class PBRPainterWindow : EditorWindow
                         {
                             // 获取遮罩像素
                             Color maskPixel = mask.GetPixel(x, y);
-                            
                             if (useMaskGrayscale)
                             {
                                 // 只使用灰度信息（亮度），结合画笔颜色
                                 float grayscale = maskPixel.grayscale; // 计算灰度值
-                                newColor = Color.Lerp(originalColor, brushColor, grayscale * brushColor.a);
+                                //  新透明度 = 遮罩灰度 * 遮罩Alpha * 笔刷透明度
+                                float NewAlpha = grayscale * maskPixel.a * brushColor.a;
+                                newColor = Color.Lerp(originalColor, brushColor, NewAlpha);
                             }
                             else
                             {
+                                // 新透明度 = 遮罩透明度 * 笔刷透明度
+                                float NewAlpha = maskPixel.a * brushColor.a;
                                 // 使用遮罩本身颜色，忽略画笔颜色
-                                newColor = Color.Lerp(originalColor, maskPixel, maskPixel.a * brushColor.a);
+                                newColor = Color.Lerp(originalColor, maskPixel, NewAlpha);
                             }
                         }
                         else
@@ -1009,9 +1012,9 @@ public class PBRPainterWindow : EditorWindow
                             // 无遮罩时使用默认逻辑
                             newColor = Color.Lerp(originalColor, brushColor, alpha);
                         }
-
                         texture.SetPixel(targetX, targetY, newColor);
                     }
+                    
                 }
             }
         }
@@ -1078,16 +1081,20 @@ public class PBRPainterWindow : EditorWindow
     {
         Texture2D mask = new Texture2D(size, size, TextureFormat.Alpha8, false);
         mask.filterMode = FilterMode.Bilinear;
-        
+
+        float Radius = size * 0.5f;
+        float Radius_Iner = Radius * hardness;
+        float Padding_Width = Radius - Radius_Iner;
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
             {
-                float dx = x / (float)size - 0.5f;
-                float dy = y / (float)size - 0.5f;
-                float distance = Mathf.Sqrt(dx * dx + dy * dy) * 2.0f;
-                float falloff = Mathf.Lerp(0.1f, 1.0f, hardness);
-                float alpha = Mathf.Clamp01(1.0f - Mathf.Pow(distance, falloff));
+                float dx = x - size * 0.5f;
+                float dy = y - size * 0.5f;
+                float distance = Mathf.Sqrt(dx * dx + dy * dy);
+
+                float Delta = distance - Radius_Iner;
+                float alpha = Delta <= 0 ? 1 : distance >= Radius ? 0 : (Padding_Width - Delta) / Padding_Width;
                 mask.SetPixel(x, y, new Color(1, 1, 1, alpha));
             }
         }
