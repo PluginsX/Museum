@@ -1188,7 +1188,7 @@ public class PBRPainterWindow : EditorWindow
         else if (mapName.Contains("Metallic"))
             return Color.black;
         else if (mapName.Contains("Roughness"))
-            return new Color(0.5f, 0.5f, 0.5f);
+            return Color.black;
         else if (mapName.Contains("Occlusion"))
             return Color.white;
         else if (mapName.Contains("Emission"))
@@ -1229,12 +1229,19 @@ public class PBRPainterWindow : EditorWindow
     private void IsolateObject(bool isolate)
     {
         if (targetObject == null) return;
-        
+    
+        // 处理所有渲染器组件
         foreach (var renderer in FindObjectsOfType<Renderer>())
         {
-            if (renderer.gameObject != targetObject && !renderer.gameObject.transform.IsChildOf(targetObject.transform))
-            {
+            if(renderer.gameObject != targetObject ){
                 renderer.enabled = !isolate;
+            }
+        }
+        // 处理所有碰撞组件
+        foreach (var collider in FindObjectsOfType<Collider>())
+        {
+            if(collider.gameObject != targetObject ){
+                collider.enabled = !isolate;
             }
         }
     }
