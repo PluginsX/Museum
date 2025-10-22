@@ -72,6 +72,7 @@ public class PBRPainterWindow : EditorWindow
     private float brushSize = 0.1f;
     private float brushHardness = 1.0f;
     private Texture2D brushMask;
+    private bool useMaskGrayscale = true; // 灰度遮罩开关
     private float brushSpacing = 0.1f; // 笔刷间距（单位：米）
     private Vector3 lastPaintPosition = Vector3.one * float.MaxValue; // 上次绘制位置
     
@@ -818,8 +819,28 @@ public class PBRPainterWindow : EditorWindow
         brushSize = EditorGUILayout.Slider("画笔尺寸", brushSize, 0.01f, 1.0f);
         brushHardness = EditorGUILayout.Slider("画笔硬度", brushHardness, 0.01f, 1.0f);
         brushColor.a = EditorGUILayout.Slider("不透明度", brushColor.a, 0.01f, 1.0f);
-        brushSpacing = EditorGUILayout.Slider("笔刷间距", brushSpacing, 0.0f, 1.0f); 
-        brushMask = EditorGUILayout.ObjectField("笔刷遮罩", brushMask, typeof(Texture2D), false) as Texture2D;
+        brushSpacing = EditorGUILayout.Slider("笔刷间距", brushSpacing, 0.0f, 1.0f);
+
+        // 新增灰度复选框（调整布局顺序）
+        GUILayout.BeginHorizontal();
+        // 1. "笔刷遮罩"文字（靠左）
+        EditorGUILayout.LabelField("笔刷遮罩", GUILayout.Width(60));
+        // 弹性空间分隔左右元素
+        GUILayout.FlexibleSpace();
+        // 2. "灰度"文字（靠左）
+        EditorGUILayout.LabelField("灰度", GUILayout.Width(30));
+        // 3. 灰度复选框（靠右）
+        useMaskGrayscale = EditorGUILayout.Toggle(useMaskGrayscale, GUILayout.Width(15));
+        // 4. Texture2D引用（靠右，保持小预览图样式）
+        brushMask = EditorGUILayout.ObjectField(
+            brushMask, 
+            typeof(Texture2D), 
+            false, 
+            GUILayout.Width(60),  // 固定宽度保持小预览图
+            GUILayout.Height(60)  // 匹配编辑器字段高度
+        ) as Texture2D;
+        GUILayout.EndHorizontal();
+
         GUILayout.EndVertical();
     }
 
@@ -964,7 +985,31 @@ public class PBRPainterWindow : EditorWindow
                     if (alpha > 0)
                     {
                         Color originalColor = texture.GetPixel(targetX, targetY);
-                        Color newColor = Color.Lerp(originalColor, brushColor, alpha);
+                        Color newColor;
+
+                        if (brushMask != null)
+                        {
+                            // 获取遮罩像素
+                            Color maskPixel = mask.GetPixel(x, y);
+                            
+                            if (useMaskGrayscale)
+                            {
+                                // 只使用灰度信息（亮度），结合画笔颜色
+                                float grayscale = maskPixel.grayscale; // 计算灰度值
+                                newColor = Color.Lerp(originalColor, brushColor, grayscale * brushColor.a);
+                            }
+                            else
+                            {
+                                // 使用遮罩本身颜色，忽略画笔颜色
+                                newColor = Color.Lerp(originalColor, maskPixel, maskPixel.a * brushColor.a);
+                            }
+                        }
+                        else
+                        {
+                            // 无遮罩时使用默认逻辑
+                            newColor = Color.Lerp(originalColor, brushColor, alpha);
+                        }
+
                         texture.SetPixel(targetX, targetY, newColor);
                     }
                 }
