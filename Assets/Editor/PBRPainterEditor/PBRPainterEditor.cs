@@ -13,6 +13,7 @@ public class MaterialLayer
     public bool visible = true;
     public bool expanded = false;
     public bool isActive = false;
+    public Material LayerMaterial = null;
     [SerializeField] public List<TextureMapEntry> textureMaps = new List<TextureMapEntry>();
 }
 
@@ -43,22 +44,23 @@ public class PBRPainterWindow : EditorWindow
     {
         "unity_Lightmaps", "unity_LightmapsInd", "unity_ShadowMasks",
         "unity_ReflectionProbes", "unity_SpecCube0", "unity_SpecCube1",
-        "unity_SpecCube0_HDR", "unity_SpecCube1_HDR"
+        "unity_SpecCube0_HDR", "unity_SpecCube1_HDR","MainTex"
     };
 
     private GUIStyle activeLayerStyle = new GUIStyle();
     private GUIStyle activeMapStyle = new GUIStyle();
     private GUIStyle defaultLayerStyle = new GUIStyle();
     private GUIStyle defaultMapStyle = new GUIStyle();
+    private GUIStyle toggleActiveStyle = new GUIStyle();
+    private GUIStyle toggleDisabledStyle = new GUIStyle();
 
     private GameObject targetObject;
     private Mesh targetMesh;
-    private Renderer targetRenderer;
-    private Material originalMaterial;
-    private Material previewMaterialInstance; // 用于保存当前预览材质实例
-    private Material paintingMaterial; // 复制基础参考材质，用于绘制
+    private Renderer targetRenderer;// 目标对象渲染器
+    private Material originalMaterial;// 目标对象原始材质
+    private Material baseMaterial;// 基础参考材质
     private Material previewSingleLayerMaterial; // 用于预览单个图层的简单材质
-    private Material baseMaterial;
+    private Material paintingMaterial; // 复制基础参考材质，用于绘制
     [SerializeField] private bool lockBaseMaterial = false; // 新增：锁定基础材质标志
     [SerializeField] private List<MaterialLayer> materialLayers = new List<MaterialLayer>();
     private Shader targetShader;
@@ -75,7 +77,7 @@ public class PBRPainterWindow : EditorWindow
     private float brushHardness = 1.0f;
     private Texture2D brushMask;
     private bool useMaskGrayscale = true; // 灰度遮罩开关
-    private float brushSpacing = 0.1f; // 笔刷间距（单位：米）
+    private float brushSpacing = 0.001f; // 笔刷间距（单位：米）
     private Vector3 lastPaintPosition = Vector3.one * float.MaxValue; // 上次绘制位置
     
     private int selectedLayerIndex = -1;
@@ -107,17 +109,26 @@ public class PBRPainterWindow : EditorWindow
     // 窗口关闭时自动清理
     private void OnDestroy()
     {
+
         // 恢复原始材质
         if (targetRenderer != null && originalMaterial != null)
         {
             targetRenderer.sharedMaterial = originalMaterial;
+            UnityEngine.Debug.Log("已恢复目标对象原始材质");
         }
-        
-        // 销毁预览材质实例
-        if (previewMaterialInstance != null)
+        // 销毁绘制材质实例
+        if (paintingMaterial != null)
         {
-            DestroyImmediate(previewMaterialInstance);
-            previewMaterialInstance = null;
+            DestroyImmediate(paintingMaterial);
+            paintingMaterial = null;
+            UnityEngine.Debug.Log("销毁绘制材质实例");
+        }
+        // 销毁单个参数图层预览材质
+        if (previewSingleLayerMaterial != null)
+        {
+            DestroyImmediate(previewSingleLayerMaterial);
+            previewSingleLayerMaterial = null;
+            UnityEngine.Debug.Log("销毁单个参数图层预览材质");
         }
         
         // 退出孤立模式
@@ -129,22 +140,10 @@ public class PBRPainterWindow : EditorWindow
 
         // 重置绘制模式
         isPaintingMode = false;
-
-        // 新增材质清理
-        if (paintingMaterial != null)
-        {
-            DestroyImmediate(paintingMaterial);
-            paintingMaterial = null;
-        }
-
-        if (previewSingleLayerMaterial != null)
-        {
-            DestroyImmediate(previewSingleLayerMaterial);
-            previewSingleLayerMaterial = null;
-        }
     
     }
 
+    // 初始化样式
     private void InitializeStyles()
     {
         // 安全检查：确保EditorStyles.helpBox已初始化
@@ -163,6 +162,26 @@ public class PBRPainterWindow : EditorWindow
         
         activeMapStyle = new GUIStyle(defaultMapStyle);
         activeMapStyle.normal.background = MakeTex(2, 2, new Color(0.3f, 0.6f, 0.9f, 0.4f));
+    
+        // 禁用状态样式（黑底白字，居中）
+        toggleDisabledStyle = new GUIStyle(defaultLayerStyle);
+        toggleDisabledStyle.normal.background = MakeTex(2, 2, Color.black); // 黑色背景
+        toggleDisabledStyle.active.background = MakeTex(2, 2, Color.black);
+        toggleDisabledStyle.focused.background = MakeTex(2, 2, Color.black);
+        toggleDisabledStyle.normal.textColor = Color.white; // 白色文字
+        toggleDisabledStyle.fontSize = 20;
+        toggleDisabledStyle.alignment = TextAnchor.MiddleCenter; // 文字居中
+        toggleDisabledStyle.padding = new RectOffset(8, 8, 2, 2); // 内边距调整
+
+        // 激活状态样式（蓝底白字，居中）
+        toggleActiveStyle = new GUIStyle(defaultLayerStyle);
+        toggleActiveStyle.normal.background = MakeTex(2, 2, new Color(0.2f, 0.4f, 0.8f)); // 蓝色背景
+        toggleActiveStyle.active.background = MakeTex(2, 2, new Color(0.15f, 0.3f, 0.6f)); // 点击时稍暗
+        toggleActiveStyle.focused.background = MakeTex(2, 2, new Color(0.25f, 0.5f, 0.9f)); // 聚焦时稍亮
+        toggleActiveStyle.normal.textColor = Color.white; // 白色文字
+        toggleDisabledStyle.fontSize = 20;
+        toggleActiveStyle.alignment = TextAnchor.MiddleCenter; // 文字居中
+        toggleActiveStyle.padding = new RectOffset(8, 8, 2, 2); // 与禁用样式保持一致内边距
     }
 
     private Texture2D MakeTex(int width, int height, Color col)
@@ -219,7 +238,7 @@ private void PickSelectedObject()
     GameObject selectedObj = Selection.activeGameObject;
     ValidateAndSetTargetObject(selectedObj);
 }
-
+    // 设置目标对象
     private void ValidateAndSetTargetObject(GameObject obj)
     {
         // 检查是否有MeshFilter组件
@@ -248,11 +267,17 @@ private void PickSelectedObject()
         }
         meshCollider.sharedMesh = meshFilter.sharedMesh;
 
-        // 设置目标对象
+        // 成功设置目标对象后初始化相关属性
         targetObject = obj;
         targetMesh = meshFilter.sharedMesh;
         targetRenderer = obj.GetComponent<Renderer>();
+        originalMaterial = targetRenderer.sharedMaterial;
+        UnityEngine.Debug.Log("成功设置目标对象后初始化相关属性");
 
+        // 如果基础参考材质没有上锁
+        if(!lockBaseMaterial){
+            baseMaterial = originalMaterial;
+        }
         // 处理材质
         HandleTargetMaterial();
     }
@@ -260,6 +285,7 @@ private void PickSelectedObject()
 
     private void HandleTargetMaterial()
     {
+        UnityEngine.Debug.Log("HandleTargetMaterial()");
         // 如果有渲染器且有材质
         if (targetRenderer != null && targetRenderer.sharedMaterial != null)
         {
@@ -311,68 +337,66 @@ private void PickSelectedObject()
 
     private void DrawModeControls()
     {
+        //UnityEngine.Debug.Log("DrawModeControls()");
         EditorGUILayout.LabelField("模式控制", EditorStyles.boldLabel);
         
         GUILayout.BeginHorizontal();
         
-        // 合并绘制模式按钮
+        // 进入绘制模式按钮
         string paintModeButtonText = isPaintingMode ? "退出绘制模式" : "进入绘制模式";
-        if (GUILayout.Button(paintModeButtonText))
+        if (GUILayout.Button(paintModeButtonText,isPaintingMode ? toggleActiveStyle : toggleDisabledStyle,GUILayout.Height(50)))
         {
             if (!isPaintingMode)
             {
-                // 进入绘制模式
-                if (targetObject != null && targetMesh != null && baseMaterial != null)
-                {
-                    originalMaterial = targetRenderer.sharedMaterial;
-                    targetShader = baseMaterial.shader;
-
-                    // 确保绘制材质存在
-                    if (paintingMaterial == null)
-                    {
-                        paintingMaterial = new Material(baseMaterial);
-                        paintingMaterial.name = "Painting Material";
-                    }
-
+                // 如果有绘制材质，直接进入绘图模式
+                if(paintingMaterial){
                     isPaintingMode = true;
-                    EnsureValidCollider();
-                    EnsureLayersHaveTextures();
-                    UpdateMaterialPreview();
+
+                    // 刷新视图
                     SceneView.RepaintAll();
-                    lastPaintPosition = Vector3.one * float.MaxValue;
+                }else{
+                    EditorUtility.DisplayDialog("错误", "请先创建材质图层再进入绘制模式", "确定");
+
+                    // //首次进入绘图模式
+                    // if (targetObject != null && targetMesh != null && baseMaterial != null)
+                    // {
+                    //     originalMaterial = targetRenderer.sharedMaterial;
+                    //     targetShader = baseMaterial.shader;
+
+                    //     // 确保绘制材质存在
+                    //     if (paintingMaterial == null)
+                    //     {
+                    //         // 首次进入绘制模式，初始化绘制材质，
+                    //         paintingMaterial = new Material(baseMaterial);
+                    //         paintingMaterial.name = "Painting Material";
+                    //         // 拷贝原始材质参数
+                    //         paintingMaterial.CopyPropertiesFromMaterial(baseMaterial);
+                    //         // 将原始参数逐个拷贝到参数图层
+                    //         // 待开发。。。
+                    //     }
+
+                    //     isPaintingMode = true;
+                    //     EnsureValidCollider();
+                    //     EnsureLayersHaveTextures();
+                    //     //UpdateMaterialPreview();
+
+                    //     // 刷新视图
+                    //     SceneView.RepaintAll();
+                    //     lastPaintPosition = Vector3.one * float.MaxValue;
+                    // }
+                    // else
+                    // {
+                    //     string message = targetObject == null ? "请选择目标对象" :
+                    //                     baseMaterial == null ? "请设置基础参考材质" : "目标对象没有Mesh";
+                    //     EditorUtility.DisplayDialog("错误", message, "确定");
+                    // }
                 }
-                else
-                {
-                    string message = targetObject == null ? "请选择目标对象" :
-                                     baseMaterial == null ? "请设置基础参考材质" : "目标对象没有Mesh";
-                    EditorUtility.DisplayDialog("错误", message, "确定");
-                }
+                
             }
             else
             {
                 // 退出绘制模式
                 isPaintingMode = false;
-                foreach (var layer in materialLayers)
-                {
-                    layer.isActive = false;
-                    foreach (var entry in layer.textureMaps)
-                    {
-                        entry.isPainting = false;
-                    }
-                }
-
-                // 恢复原始材质
-                if (targetRenderer != null && originalMaterial != null)
-                {
-                    targetRenderer.sharedMaterial = originalMaterial;
-                }
-
-                // 销毁预览材质实例
-                if (previewMaterialInstance != null)
-                {
-                    DestroyImmediate(previewMaterialInstance);
-                    previewMaterialInstance = null;
-                }
 
                 SceneView.RepaintAll();
             }
@@ -380,7 +404,7 @@ private void PickSelectedObject()
         
         // 合并孤立模式按钮
         string isolateButtonText = isIsolatedMode ? "退出孤立" : "孤立显示";
-        if (GUILayout.Button(isolateButtonText))
+        if (GUILayout.Button(isolateButtonText,isIsolatedMode ? toggleActiveStyle : toggleDisabledStyle,GUILayout.Height(50)))
         {
             if (targetObject != null)
             {
@@ -436,6 +460,7 @@ private void PickSelectedObject()
 
     private void DrawMaterialReferenceSection()
     {
+        //UnityEngine.Debug.Log("DrawMaterialReferenceSection()");
         EditorGUILayout.LabelField("材质参考", EditorStyles.boldLabel);
         
         GUILayout.BeginHorizontal();
@@ -510,13 +535,18 @@ private void PickSelectedObject()
         return false;
     }
 
+    // 新建材质
     private void AddNewLayer()
     {
+        UnityEngine.Debug.Log("新建图层AddNewLayer()");
+
         if (baseMaterial == null || baseMaterial.shader == null)
         {
             EditorUtility.DisplayDialog("错误", "请先设置基础参考材质", "确定");
             return;
         }
+
+        
 
         // 创建绘制材质（复制基础参考材质）
         if (paintingMaterial == null)
@@ -528,18 +558,19 @@ private void PickSelectedObject()
         // 创建单个图层预览材质（简单自发光材质）
         if (previewSingleLayerMaterial == null)
         {
-            previewSingleLayerMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            previewSingleLayerMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
             previewSingleLayerMaterial.name = "Single Layer Preview Material";
-            // 配置为自发光显示
-            previewSingleLayerMaterial.SetFloat("_Metallic", 0);
-            previewSingleLayerMaterial.SetFloat("_Roughness", 1);
-            previewSingleLayerMaterial.EnableKeyword("_EMISSION");
-            previewSingleLayerMaterial.SetColor("_EmissionColor", Color.white);
+            //配置为自发光显示
+            // previewSingleLayerMaterial.SetFloat("_Metallic", 0);
+            // previewSingleLayerMaterial.SetFloat("_Roughness", 1);
+            // previewSingleLayerMaterial.EnableKeyword("_EMISSION");
+            // previewSingleLayerMaterial.SetColor("_EmissionColor", Color.white);
         }
 
         // 原有图层创建逻辑...
         MaterialLayer newLayer = new MaterialLayer();
-        newLayer.layerName = $"Layer {materialLayers.Count}";
+        newLayer.layerName = $"M_{materialLayers.Count}";
+        newLayer.LayerMaterial = new Material(baseMaterial);
 
         for (int i = 0; i < ShaderUtil.GetPropertyCount(baseMaterial.shader); i++)
         {
@@ -567,7 +598,7 @@ private void PickSelectedObject()
     }
 
 
-    // ======================== 核心修改1：替换为旧版本可正常绘制的OnSceneGUI ========================
+    
     private void OnSceneGUI(SceneView sceneView)
     {
         if (!isPaintingMode || targetObject == null || targetMesh == null || 
@@ -580,44 +611,50 @@ private void PickSelectedObject()
         Event currentEvent = Event.current;
         HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
         
-        // 1. 计算笔刷世界大小（与原有逻辑一致）
+        // 1. 计算笔刷世界大小
         float worldSize = brushSize * Mathf.Max(
             targetMesh.bounds.extents.x, 
             targetMesh.bounds.extents.y, 
             targetMesh.bounds.extents.z);
         
-        // 2. 实时获取鼠标射线（无论是否按下鼠标）
+        // 2. 实时获取鼠标射线
         Ray worldRay = HandleUtility.GUIPointToWorldRay(currentEvent.mousePosition);
         bool isHitTarget = Physics.Raycast(worldRay, out RaycastHit hit) && hit.collider.gameObject == targetObject;
         
-        // 3. 始终绘制光标（只要命中目标，无论鼠标是否按下）
-        if (isHitTarget)
-        {
-            Handles.color = new Color(brushColor.r, brushColor.g, brushColor.b, 0.3f); // 半透明光标
-            Handles.SphereHandleCap(0, hit.point, Quaternion.identity, worldSize, EventType.Repaint);
-        }
+        // 3. 始终绘制光标（改进：即使未命中目标也显示光标在射线方向上）
+        Vector3 cursorPosition = isHitTarget ? hit.point : worldRay.origin + worldRay.direction * 10f;
+        Handles.color = new Color(brushColor.r, brushColor.g, brushColor.b, isHitTarget ? 0.3f : 0.1f);
+        Handles.SphereHandleCap(0, cursorPosition, Quaternion.identity, worldSize, EventType.Repaint);
         
-        // 4. 处理绘制逻辑（保留原有间距判断和鼠标事件）
-        if (isHitTarget && !currentEvent.alt && !currentEvent.control && !currentEvent.shift)
+        // 4. 处理绘制逻辑（改进：允许从任意位置开始拖动，命中模型时再绘制）
+        if (!currentEvent.alt && !currentEvent.control && !currentEvent.shift)
         {
-            float distanceFromLast = Vector3.Distance(hit.point, lastPaintPosition);
-            
+            // 鼠标按下时开始拖动（无论是否在模型上）
             if (currentEvent.type == EventType.MouseDown && currentEvent.button == 0)
             {
                 isMouseDragging = true;
-                PaintOnTexture(hit);
-                lastPaintPosition = hit.point;
-                currentEvent.Use();
-                sceneView.Repaint();
-            }
-            else if (currentEvent.type == EventType.MouseDrag && currentEvent.button == 0 && isMouseDragging)
-            {
-                if (distanceFromLast >= brushSpacing || brushSpacing <= 0)
+                // 如果初始点击就在模型上，直接绘制
+                if (isHitTarget)
                 {
                     PaintOnTexture(hit);
                     lastPaintPosition = hit.point;
-                    currentEvent.Use();
-                    sceneView.Repaint();
+                }
+                currentEvent.Use();
+                sceneView.Repaint();
+            }
+            // 鼠标拖动时，只要命中模型就绘制
+            else if (currentEvent.type == EventType.MouseDrag && currentEvent.button == 0 && isMouseDragging)
+            {
+                if (isHitTarget)
+                {
+                    float distanceFromLast = Vector3.Distance(hit.point, lastPaintPosition);
+                    if (distanceFromLast >= brushSpacing || brushSpacing <= 0 || lastPaintPosition == Vector3.one * float.MaxValue)
+                    {
+                        PaintOnTexture(hit);
+                        lastPaintPosition = hit.point;
+                        currentEvent.Use();
+                        sceneView.Repaint();
+                    }
                 }
             }
         }
@@ -626,74 +663,23 @@ private void PickSelectedObject()
             isMouseDragging = false;
         }
         
-        // 5. 鼠标抬起时重置状态（原有逻辑）
+        // 5. 鼠标抬起时重置状态
         if (currentEvent.type == EventType.MouseUp)
         {
             isMouseDragging = false;
             lastPaintPosition = Vector3.one * float.MaxValue;
         }
         
-        // 6. 强制重绘确保光标实时更新（核心新增）
+        // 6. 强制重绘确保光标实时更新
         if (isPaintingMode)
         {
             sceneView.Repaint();
         }
     }
-    // 增强 UpdateMaterialPreview 方法的可靠性
-    // private void UpdateMaterialPreview()
-    // {
-    //     if (targetRenderer == null || targetShader == null) return;
 
-    //     // 检查是否有孤立图层
-    //     bool hasIsolated = false;
-    //     foreach (var layer in materialLayers)
-    //     {
-    //         foreach (var entry in layer.textureMaps)
-    //         {
-    //             if (entry.isolateThisMap)
-    //             {
-    //                 ApplyIsolatedPreview(materialLayers.IndexOf(layer), entry);
-    //                 hasIsolated = true;
-    //                 break;
-    //             }
-    //         }
-    //         if (hasIsolated) break;
-    //     }
-
-    //     if (!hasIsolated)
-    //     {
-    //         // 没有孤立图层，使用绘制材质
-    //         if (paintingMaterial == null)
-    //         {
-    //             paintingMaterial = new Material(targetShader);
-    //         }
-    //         paintingMaterial.CopyPropertiesFromMaterial(baseMaterial);
-
-    //         // 应用所有可见图层
-    //         foreach (var layer in materialLayers)
-    //         {
-    //             if (!layer.visible) continue;
-
-    //             foreach (var entry in layer.textureMaps)
-    //             {
-    //                 if (entry.isPainting && entry.textureData.paintTexture != null)
-    //                 {
-    //                     paintingMaterial.SetTexture(entry.mapName, entry.textureData.paintTexture);
-    //                 }
-    //             }
-    //         }
-
-    //         targetRenderer.sharedMaterial = paintingMaterial;
-    //     }
-
-    //     // 强制更新渲染器
-    //     targetRenderer.enabled = false;
-    //     targetRenderer.enabled = true;
-    //     SceneView.RepaintAll();
-    // }
-    // 修改 UpdateMaterialPreview 方法，避免在迭代时修改集合
     private void UpdateMaterialPreview()
     {
+        //UnityEngine.Debug.Log("UpdateMaterialPreview()");
         if (targetRenderer == null || targetShader == null) return;
 
         // 先收集所有孤立图层，避免迭代时修改集合
@@ -711,6 +697,7 @@ private void PickSelectedObject()
 
         // 处理孤立图层
         bool hasIsolated = isolatedEntries.Count > 0;
+
         if (hasIsolated)
         {
             var firstIsolated = isolatedEntries[0];
@@ -718,12 +705,18 @@ private void PickSelectedObject()
         }
         else
         {
+
             // 没有孤立图层，使用绘制材质
             if (paintingMaterial == null)
             {
+                // 首次进入绘制模式，初始化绘制材质，拷贝原始材质参数
                 paintingMaterial = new Material(targetShader);
+                paintingMaterial.CopyPropertiesFromMaterial(baseMaterial);
+
+                // 将原始参数逐个拷贝到参数图层
+                // 待开发。。。
+
             }
-            paintingMaterial.CopyPropertiesFromMaterial(baseMaterial);
 
             // 应用所有可见图层
             foreach (var layer in materialLayers.ToList()) // 使用ToList()创建副本避免迭代冲突
@@ -738,7 +731,7 @@ private void PickSelectedObject()
                     }
                 }
             }
-
+            
             targetRenderer.sharedMaterial = paintingMaterial;
         }
 
@@ -849,10 +842,21 @@ private void PickSelectedObject()
                 
                 if (GUILayout.Button("删除", GUILayout.Width(50)))
                 {
-                    if (EditorUtility.DisplayDialog("确认", $"确定要删除图层 '{layer.layerName}' 吗?", "是", "否"))
+                    if (EditorUtility.DisplayDialog("确认", $"确定要删除材质？ '{layer.layerName}' 吗?", "是", "否"))
                     {
                         bool wasActive = layer.isActive;
                         materialLayers.RemoveAt(index);
+                        // 删除材质
+                        
+                        if(materialLayers.Count>0){
+                            // 如果还有别的材质则以别的材质显示
+                            paintingMaterial = materialLayers[0].LayerMaterial;
+                            targetRenderer.sharedMaterial = paintingMaterial!=null?paintingMaterial:baseMaterial;
+                        }else{
+                            // 否则就赋予基础参考材质
+                            paintingMaterial = null;
+                            targetRenderer.sharedMaterial = baseMaterial;
+                        }
                         
                         if (wasActive)
                         {
@@ -875,20 +879,20 @@ private void PickSelectedObject()
                     }
                 }
                 
-                if (GUILayout.Button("选择绘制", GUILayout.Width(80)))
-                {
-                    foreach (var l in materialLayers)
-                    {
-                        l.isActive = false;
-                    }
+                // if (GUILayout.Button("选择绘制", GUILayout.Width(80)))
+                // {
+                //     foreach (var l in materialLayers)
+                //     {
+                //         l.isActive = false;
+                //     }
                     
-                    layer.isActive = true;
-                    selectedLayerIndex = index;
-                    if (string.IsNullOrEmpty(selectedMapName) && layer.textureMaps.Count > 0)
-                    {
-                        selectedMapName = layer.textureMaps[0].mapName;
-                    }
-                }
+                //     layer.isActive = true;
+                //     selectedLayerIndex = index;
+                //     if (string.IsNullOrEmpty(selectedMapName) && layer.textureMaps.Count > 0)
+                //     {
+                //         selectedMapName = layer.textureMaps[0].mapName;
+                //     }
+                // }
             }
             GUILayout.EndHorizontal();
             
@@ -907,11 +911,11 @@ private void PickSelectedObject()
         // 设置预览材质使用当前图层作为自发光
         if (entry.textureData.paintTexture != null)
         {
-            previewSingleLayerMaterial.SetTexture("_EmissionMap", entry.textureData.paintTexture);
+            previewSingleLayerMaterial.SetTexture("_BaseMap", entry.textureData.paintTexture);
         }
         else if (entry.textureData.sourceTexture != null)
         {
-            previewSingleLayerMaterial.SetTexture("_EmissionMap", entry.textureData.sourceTexture);
+            previewSingleLayerMaterial.SetTexture("_BaseMap", entry.textureData.sourceTexture);//_EmissionMap
         }
 
         // 应用到目标对象
@@ -950,20 +954,19 @@ private void PickSelectedObject()
                         if (entry.isolateThisMap)
                         {
                             // 取消其他所有孤立设置
-                            foreach (var l in materialLayers)
+                            foreach (var e in layer.textureMaps)
                             {
-                                foreach (var e in l.textureMaps)
+                                if (e != entry)
                                 {
-                                    if (e != entry)
-                                    {
-                                        e.isolateThisMap = false;
-                                    }
+                                    e.isolateThisMap = false;
                                 }
                             }
+                            // 孤立显示该参数图层
                             ApplyIsolatedPreview(layerIndex, entry);
                         }
                         else
                         {
+                            // 取消孤立单个图层，显示材质图层完整材质
                             RestoreAllMapsVisibility();
                         }
                     }
@@ -972,7 +975,7 @@ private void PickSelectedObject()
                     string displayName = entry.mapName.StartsWith("_") ? entry.mapName.Substring(1) : entry.mapName;
                     //EditorGUILayout.LabelField(displayName, GUILayout.Width(150), GUILayout.Height(50));
                     
-                    string buttonText = entry.isPainting ? "绘制结束" : "绘制此图";
+                    // string buttonText = entry.isPainting ? "绘制结束" : "绘制此图";
                     if (GUILayout.Button(displayName,GUILayout.Width(200), GUILayout.Height(50)))
                     {
                         // 关键修复：切换状态时强制更新选中的参数层
@@ -1000,52 +1003,9 @@ private void PickSelectedObject()
                         // 更新选中的图层和参数层
                         selectedLayerIndex = layerIndex;
                         selectedMapName = entry.mapName;
-                        currentEvent.Use(); // 防止事件穿透到其他UI
+                        //currentEvent.Use(); // 防止事件穿透到其他UI
                         
-                        // // 处理孤立显示
-                        // if (true && entry.isolateThisMap)
-                        // {
-                        //     IsolateMapLayer(layerIndex, entry.mapName);
-                        // }
-                        // else
-                        // {
-                        //     RestoreAllMapsVisibility();
-                        // }
-
-                        //UpdateMaterialPreview();
-                        // 强制刷新场景视图
-                        //SceneView.RepaintAll();
-
-                        //********************************************************************
-                        // // 左键点击且未处理过
-                        // if (entryRect.Contains(currentEvent.mousePosition))
-                        // {
-                        //     // 重置所有参数层的选中状态
-                        //     foreach (var l in materialLayers)
-                        //     {
-                        //         foreach (var e in l.textureMaps)
-                        //         {
-                        //             e.isPainting = false;
-                        //         }
-                        //     }
-
-                        //     // 选中当前参数层
-                        //     entry.isPainting = true;
-                        //     selectedLayerIndex = layerIndex;
-                        //     selectedMapName = entry.mapName;
-
-                        //     // 激活当前图层
-                        //     foreach (var l in materialLayers)
-                        //     {
-                        //         l.isActive = false;
-                        //     }
-                        //     layer.isActive = true;
-
-                        //     // 更新预览并标记事件已处理
-                        //     UpdateMaterialPreview();
-                        //     SceneView.RepaintAll();
-                        //     currentEvent.Use(); // 防止事件穿透到其他UI
-                        // }
+                        
                     }
                     
                     GUILayout.FlexibleSpace();
@@ -1083,14 +1043,14 @@ private void PickSelectedObject()
     // 新增：孤立显示指定纹理图层
     private void IsolateMapLayer(int layerIndex, string mapName)
     {
-        if (targetObject == null || previewMaterialInstance == null) return;
+        if (targetObject == null || previewSingleLayerMaterial == null) return;
         
         foreach (var renderer in targetObject.GetComponentsInChildren<Renderer>())
         {
             Material[] materials = renderer.sharedMaterials;
             for (int i = 0; i < materials.Length; i++)
             {
-                if (materials[i] == previewMaterialInstance)
+                if (materials[i] == previewSingleLayerMaterial)
                 {
                     // 隐藏其他所有纹理
                     foreach (var layer in materialLayers)
@@ -1099,7 +1059,7 @@ private void PickSelectedObject()
                         {
                             if (entry.mapName != mapName)
                             {
-                                previewMaterialInstance.SetTexture(entry.mapName, null);
+                                previewSingleLayerMaterial.SetTexture(entry.mapName, null);
                             }
                         }
                     }
@@ -1111,7 +1071,9 @@ private void PickSelectedObject()
     // 新增：恢复所有纹理显示
     private void RestoreAllMapsVisibility()
     {
+        targetRenderer.sharedMaterial = paintingMaterial;
         UpdateMaterialPreview();
+        
     }
 
     private void DrawProjectionOptions()
@@ -1207,7 +1169,7 @@ private void PickSelectedObject()
             InitializePaintTexture(layer, selectedMapName);
             return;
         }
-        
+
         Vector2 uv = hit.textureCoord;
         int pixelX = Mathf.Clamp((int)(uv.x * textureData.paintTexture.width), 0, textureData.paintTexture.width - 1);
         int pixelY = Mathf.Clamp((int)(uv.y * textureData.paintTexture.height), 0, textureData.paintTexture.height - 1);
