@@ -128,6 +128,8 @@ public class MeshPainter : EditorWindow
     private static Material previewMaterial_Isolation; // 用于预览单个图层的简单材质
     private static Material previewMaterial_Final; // 复制基础参考材质，用于绘制
 
+    private static Shader defaultPaintShader = null;
+
     [SerializeField]
     private bool lockbaseRefMaterial = false; // 锁定基础材质
     [SerializeField]
@@ -242,6 +244,10 @@ public class MeshPainter : EditorWindow
     private void InitializeStyles()
     {
         UnityEngine.Debug.Log("InitializeStyles()");
+
+        defaultPaintShader = Shader.Find("Shader Graphs/SG_PaintStanderd") ?? Shader.Find("Universal Render Pipeline/Lit");
+
+        UnityEngine.Debug.Log("defaultPaintShader:"+defaultPaintShader);
         // 安全检查：确保EditorStyles.helpBox已初始化
         if (EditorStyles.helpBox == null)
         {
@@ -329,63 +335,81 @@ public class MeshPainter : EditorWindow
             EditorUtility.DisplayDialog("提示", "请先在Hierarchy中选择一个对象", "确定");
             return;
         }
-        
-        GameObject selectedObj = Selection.activeGameObject;
-        ValidateAndSettarget_Object(selectedObj);
-    }
 
-    // 预处理目标对象碰撞组件
-    private void ValidateAndSettarget_Object(GameObject obj)
-    {
-        // 检查是否有MeshFilter组件
-        MeshFilter meshFilter = obj.GetComponent<MeshFilter>();
-        if (meshFilter == null)
+        // 获取选择对象
+        GameObject selectedObj = Selection.activeGameObject;
+
+        // 检查是否有Mesh
+        if (selectedObj.GetComponent<MeshFilter>()==null)
         {
             EditorUtility.DisplayDialog("错误", "所选对象不支持绘制", "确定");
             return;
         }
+        
+        // 只要有网格就可以画
+        UnityEngine.Debug.Log("成功设置目标对象后初始化相关属性");
+        // 预处理碰撞
+        PreprocessingCollisions(selectedObj);
+        // 成功处理碰撞后初始化变量
+        target_Object = selectedObj;
+        target_Mesh = selectedObj.GetComponent<MeshFilter>().sharedMesh;
 
-        // 禁用其他碰撞体，确保只有MeshCollider
-        Collider[] colliders = obj.GetComponents<Collider>();
-        foreach (var collider in colliders)
+        // 预处理渲染 , 预处理环节已经获取原始材质
+        PreprocessingRendering(selectedObj);
+        // 成功处理渲染后初始化变量
+        target_Renderer = selectedObj.GetComponent<Renderer>();
+
+        // 如果基础参考材质没有上锁
+        if(!lockbaseRefMaterial){
+            baseRefMaterial = target_Renderer.sharedMaterial;
+        }
+        targetShader = target_Renderer.sharedMaterial.shader;
+    }
+
+    // 预处理目标对象碰撞组件
+    private void PreprocessingCollisions(GameObject obj)
+    {
+        // 禁用其他类型碰撞体
+        foreach (var collider in obj.GetComponents<Collider>())
         {
             if (!(collider is MeshCollider))
             {
                 collider.enabled = false;
             }
         }
-
-        // 确保有MeshCollider
+        // 是否有 MeshCollider
         MeshCollider meshCollider = obj.GetComponent<MeshCollider>();
+        // 如果没有就加一个
         if (meshCollider == null)
         {
             meshCollider = obj.AddComponent<MeshCollider>();
+            meshCollider.sharedMesh = obj.GetComponent<MeshFilter>().sharedMesh;
         }
-        meshCollider.sharedMesh = meshFilter.sharedMesh;
-
-        // 成功设置目标对象后初始化相关属性
-        target_Object = obj;
-        target_Mesh = meshFilter.sharedMesh;
-        target_Renderer = obj.GetComponent<Renderer>();
-        target_OriginalMaterial = target_Renderer.sharedMaterial;
-        UnityEngine.Debug.Log("成功设置目标对象后初始化相关属性");
-
-        // 如果基础参考材质没有上锁
-        if(!lockbaseRefMaterial){
-            baseRefMaterial = target_OriginalMaterial;
-        }
-        // 处理材质
-        HandleTargetMaterial();
+        UnityEngine.Debug.Log("预处理碰撞完成");
     }
 
-
     // 预处理目标对象渲染组件
-    private void HandleTargetMaterial()
+    private void PreprocessingRendering(GameObject obj)
     {
-        UnityEngine.Debug.Log("HandleTargetMaterial()");
-        // 如果有渲染器且有材质
-        if (target_Renderer != null && target_Renderer.sharedMaterial != null)
+        // 是否有 Renderer
+        Renderer Renderer = obj.GetComponent<Renderer>();;
+        // 如果没有就加一个
+        if (Renderer == null)
         {
+            Renderer = obj.AddComponent<Renderer>();
+            // 使用URP默认Lit材质
+            Renderer.sharedMaterial = new Material(defaultPaintShader);//Shader Graph/SG_PaintStanderd
+            // 记录为原始材质
+            target_OriginalMaterial = Renderer.sharedMaterial;
+            return;
+        }
+
+        // 有没有材质
+        if (target_Renderer.sharedMaterial != null)
+        {
+            // 有材质就先记录一下原始材质
+            target_OriginalMaterial = target_Renderer.sharedMaterial;
+
             // 检查材质是否有Texture2D属性
             bool hasTextureProperties = false;
             Shader shader = target_Renderer.sharedMaterial.shader;
@@ -401,35 +425,24 @@ public class MeshPainter : EditorWindow
                     }
                 }
             }
-
             if (hasTextureProperties)
             {
-                baseRefMaterial = target_Renderer.sharedMaterial;
+                UnityEngine.Debug.Log("预处理渲染完成");
+                return;
+            }else{
+                // 没有可绘制的材质，使用URP默认Lit材质
+                target_Renderer.sharedMaterial = new Material(defaultPaintShader);
+                UnityEngine.Debug.Log("预处理渲染完成");
+                return;
             }
-            else
-            {
-                // 使用URP默认Lit材质
-                baseRefMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            }
+        }else{
+            // 使用URP默认Lit材质
+            Renderer.sharedMaterial = new Material(defaultPaintShader);
+            // 记录为原始材质
+            target_OriginalMaterial = Renderer.sharedMaterial;
+            UnityEngine.Debug.Log("预处理渲染完成");
+            return;
         }
-        else
-        {
-            // 没有渲染器或材质，使用URP默认Lit材质
-            baseRefMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            if (target_Renderer != null)
-            {
-                target_Renderer.sharedMaterial = baseRefMaterial;
-            }
-            else
-            {
-                // 添加渲染器组件
-                MeshRenderer renderer = target_Object.AddComponent<MeshRenderer>();
-                renderer.sharedMaterial = baseRefMaterial;
-                target_Renderer = renderer;
-            }
-        }
-
-        targetShader = baseRefMaterial.shader;
     }
 
     // 绘制模式控制 
@@ -595,6 +608,14 @@ public class MeshPainter : EditorWindow
             return;
         }
 
+        //新建材质图层 
+        MaterialLayer NewLayer = new MaterialLayer();
+        NewLayer.layerName = $"Material_{materialLayers.Count}";
+        NewLayer.visible = true;//是否可见
+        NewLayer.expanded = true;//UI是否展开
+        NewLayer.isActive = true;//激活该层
+        NewLayer.LayerMaterial = new Material(baseRefMaterial);//拷贝基本参考材质新建材质
+
         //先新建参数图层列表
         List<TextureMap> textureMaps = new List<TextureMap>();
         
@@ -607,7 +628,7 @@ public class MeshPainter : EditorWindow
             if (ShaderUtil.GetPropertyType(baseRefMaterial.shader, i) == ShaderUtil.ShaderPropertyType.TexEnv)
             {
                 string propertyName = ShaderUtil.GetPropertyName(baseRefMaterial.shader, i);
-
+                // 非内置 且 不重复
                 if (!IsBuiltInTexture2D(propertyName) && !textureMaps.Any(e => e.mapName == propertyName))
                 {
                     //参数图层序号++
@@ -615,7 +636,10 @@ public class MeshPainter : EditorWindow
                     TextureMap newmMap = new TextureMap();
                     newmMap.mapName = propertyName;
                     newmMap.index = mapIndex;
+                    // 初始化纹理
                     InitializePaintTexture(newmMap);
+                    // 初始化材质纹理输入
+                    NewLayer.LayerMaterial.SetTexture(propertyName, newmMap.textureData.paintTexture);
                     textureMaps.Add(newmMap);
                 }
             }
@@ -626,23 +650,14 @@ public class MeshPainter : EditorWindow
             EditorUtility.DisplayDialog("提示", "基础材质没有可绘制的Texture2D属性(已过滤系统内置属性)", "确定");
             return;
         }
-        
-        //新建材质图层 
-        MaterialLayer NewLayer = new MaterialLayer();
-        NewLayer.layerName = "MaterialLayer";
-        NewLayer.visible = true;//是否可见
-        NewLayer.expanded = true;//UI是否展开
-        NewLayer.isActive = true;//激活该层
-        NewLayer.LayerMaterial = new Material(baseRefMaterial);//拷贝基本参考材质新建材质
         NewLayer.textureMaps = textureMaps;
-
         // 添加进材质列表
         materialLayers.Add(NewLayer);
 
         //如果没有预览材质先创建创建预览材质
-        if(previewMaterial_Final==null){
-            previewMaterial_Final = new Material(baseRefMaterial);
-        }
+        // if(previewMaterial_Final==null){
+        //     previewMaterial_Final = new Material(target_OriginalMaterial);
+        // }
         // 获取当前材质数量
         int LayersCount = materialLayers.Count;
         // 如果材质列表只有一个材质
@@ -665,6 +680,7 @@ public class MeshPainter : EditorWindow
                     previewMaterial_Final = materialLayers[i].LayerMaterial;
                     // 选择该层
                     selectedLayerIndex = i;
+                    break;
                 }
             }
         }
@@ -675,7 +691,7 @@ public class MeshPainter : EditorWindow
             previewMaterial_Isolation = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
             previewMaterial_Isolation.name = "Single Layer Preview Material";
         }
-
+        UpdateMaterialPreview();
     }
 
 
@@ -773,6 +789,9 @@ public class MeshPainter : EditorWindow
             // 没有孤立图层，显示所有材质效果
             RestoreAllMapsVisibility();
         }
+
+        target_Renderer.enabled = false;
+        target_Renderer.enabled = true;
         // 刷新Scene
         SceneView.RepaintAll();
         UnityEngine.Debug.Log("UpdateMaterialPreview()_End");
@@ -916,11 +935,6 @@ public class MeshPainter : EditorWindow
 
             }
             
-            if (wasActive)
-            {
-                UpdateMaterialPreview();
-            }
-            
             if (selectedLayerIndex == index)
             {
                 selectedLayerIndex = -1;
@@ -930,7 +944,10 @@ public class MeshPainter : EditorWindow
             {
                 selectedLayerIndex--;
             }
-            
+            if (wasActive)
+            {
+                UpdateMaterialPreview();
+            }
         }
     }
 
@@ -977,27 +994,7 @@ public class MeshPainter : EditorWindow
         EditorGUILayout.Space();
     }
 
-    // 孤立显示当前选中的参数图层
-    private void ApplyIsolatedPreview()
-    {
-        if (previewMaterial_Isolation == null||selectedMapIndex==-1) return;
 
-        // 设置预览材质使用当前图层作为自发光
-        if (currentIsolateMap.textureData.paintTexture != null)
-        {
-            previewMaterial_Isolation.SetTexture("_BaseMap", currentIsolateMap.textureData.paintTexture);
-        }
-        else if (currentIsolateMap.textureData.sourceTexture != null)
-        {
-            previewMaterial_Isolation.SetTexture("_BaseMap", currentIsolateMap.textureData.sourceTexture);//_EmissionMap
-        }
-
-        // 应用到目标对象
-        if (target_Renderer != null)
-        {
-            target_Renderer.sharedMaterial = previewMaterial_Isolation;
-        }
-    }
 
     // 1. 修复DrawLayerParameters中的按钮逻辑，确保状态正确切换
     private void DrawLayerParameters(int layerIndex, MaterialLayer layer)
@@ -1045,8 +1042,8 @@ public class MeshPainter : EditorWindow
                             // 更新当前孤立的图层为空
                             currentIsolateMap = null;
                             // 取消孤立单个图层，显示材质图层完整材质
-                            //RestoreAllMapsVisibility();
-                            UpdateMaterialPreview();
+                            RestoreAllMapsVisibility();
+                            //UpdateMaterialPreview();
                         }
                     }
 
@@ -1071,9 +1068,9 @@ public class MeshPainter : EditorWindow
                         // 激活当前参数图层
                         Map.isPainting = true;
 
-                        // 更新选中的图层和参数层
+                        // 更新选中的材质层
                         selectedLayerIndex = layerIndex;
-                        // 马上回来
+                        // 更新选中的参数层
                         selectedMapIndex = Map.index;
                         //currentEvent.Use(); // 防止事件穿透到其他UI
                     }
@@ -1110,31 +1107,25 @@ public class MeshPainter : EditorWindow
         GUILayout.EndVertical();
     }
 
-    // 新增：孤立显示指定纹理图层
-    private void IsolateMapLayer(int layerIndex, string mapName)
+    // 孤立显示当前选中的参数图层
+    private void ApplyIsolatedPreview()
     {
-        if (target_Object == null || previewMaterial_Isolation == null) return;
-        
-        foreach (var renderer in target_Object.GetComponentsInChildren<Renderer>())
+        if (previewMaterial_Isolation == null||selectedMapIndex==-1) return;
+
+        // 设置预览材质使用当前图层作为自发光
+        if (currentIsolateMap.textureData.paintTexture != null)
         {
-            Material[] materials = renderer.sharedMaterials;
-            for (int i = 0; i < materials.Length; i++)
-            {
-                if (materials[i] == previewMaterial_Isolation)
-                {
-                    // 隐藏其他所有纹理
-                    foreach (var layer in materialLayers)
-                    {
-                        foreach (var Map in layer.textureMaps)
-                        {
-                            if (Map.mapName != mapName)
-                            {
-                                previewMaterial_Isolation.SetTexture(Map.mapName, null);
-                            }
-                        }
-                    }
-                }
-            }
+            previewMaterial_Isolation.SetTexture("_BaseMap", currentIsolateMap.textureData.paintTexture);
+        }
+        else if (currentIsolateMap.textureData.sourceTexture != null)
+        {
+            previewMaterial_Isolation.SetTexture("_BaseMap", currentIsolateMap.textureData.sourceTexture);//_EmissionMap
+        }
+
+        // 应用到目标对象
+        if (target_Renderer != null)
+        {
+            target_Renderer.sharedMaterial = previewMaterial_Isolation;
         }
     }
 
@@ -1148,25 +1139,26 @@ public class MeshPainter : EditorWindow
             return;
         }
 
-        // 遍历所有纹理贴图 
+        //遍历所有纹理贴图 
         foreach (TextureMap map in materialLayers[selectedLayerIndex].textureMaps)
         {
             // 检查材质是否包含该纹理属性
             if (map.textureData.paintTexture != null && previewMaterial_Final.HasProperty(map.mapName))
             {
-                UnityEngine.Debug.Log($"材质名为：{map.mapName}");
                 previewMaterial_Final.SetTexture(map.mapName, map.textureData.paintTexture);
+                UnityEngine.Debug.Log($"成功应用材质参数：{map.mapName}");
             }
             else
             {
-                UnityEngine.Debug.LogWarning($"材质缺少纹理属性: {map.mapName} 或纹理未赋值");
+                UnityEngine.Debug.LogWarning($"材质缺少纹理属性: {map.mapName} 未能赋值");
             }
         }
-        // 应用最终材质
-        target_Renderer.sharedMaterial = previewMaterial_Final;
 
-        target_Renderer.enabled = false;
-        target_Renderer.enabled = true;
+        // 应用最终材质
+        if (target_Renderer != null)
+        {
+            target_Renderer.sharedMaterial = previewMaterial_Final;
+        }
     }
 
     private void DrawProjectionOptions()
@@ -1705,8 +1697,12 @@ public class MeshPainter : EditorWindow
             return Color.black;
         else if (mapName.Contains("SpecGloss"))
             return Color.black;
+        else if (mapName.Contains("Smoothness"))
+            return Color.black;
         else if (mapName.Contains("Bump"))
             return Color.black;
+        else if (mapName.Contains("Normal"))
+            return new Color(0.5f, 0.5f, 1.0f);
         else if (mapName.Contains("Opacity") || mapName.Contains("Alpha"))
             return Color.white;
         return Color.white;
@@ -1768,7 +1764,7 @@ public class MeshPainter : EditorWindow
         var Map = layer.textureMaps.FirstOrDefault(e => e.mapName == mapName);
         if (Map == null || Map.textureData.paintTexture == null) return;
         
-        string defaultName = $"{layer.layerName}_{mapName}.png";
+        string defaultName = $"TEX_{layer.layerName}{mapName}.png";
         string path = EditorUtility.SaveFilePanelInProject("导出纹理", defaultName, "png", "请选择保存纹理的路径");
         
         if (!string.IsNullOrEmpty(path))
@@ -1780,25 +1776,60 @@ public class MeshPainter : EditorWindow
         }
     }
 
+    // 导出单个材质
     private void ExportLayerAsMaterial(int layerIndex)
     {
-        if (layerIndex < 0 || layerIndex >= materialLayers.Count || targetShader == null) return;
+        // 1. 基础检查
+        if (layerIndex < 0 || layerIndex >= materialLayers.Count) return;
         
         MaterialLayer layer = materialLayers[layerIndex];
-        string defaultName = $"{layer.layerName}.mat";
-        string path = EditorUtility.SaveFilePanelInProject("导出材质", defaultName, "mat", "请选择保存材质的路径");
+        string defaultName = $"M_{layer.layerName}.mat";
         
-        if (!string.IsNullOrEmpty(path))
-        {
-            Material newMaterial = new Material(targetShader);
-            newMaterial.CopyPropertiesFromMaterial(baseRefMaterial);
-            MergeLayersToMaterial(newMaterial);
-            AssetDatabase.CreateAsset(newMaterial, path);
-            AssetDatabase.Refresh();
-            EditorUtility.DisplayDialog("成功", $"材质已导出到:\n{path}", "确定");
-        }
-    }
+        // 2. 获取保存路径（强制Assets目录）
+        string matPath = EditorUtility.SaveFilePanelInProject(
+            "导出材质",
+            defaultName,
+            "mat",
+            "请选择保存位置(包含贴图)"
+        );
+        if (string.IsNullOrEmpty(matPath)) return;
 
+        // 3. 创建材质副本
+        Material newMat = new Material(layer.LayerMaterial);
+        
+        // 4. 处理所有贴图
+        foreach (var map in layer.textureMaps.Where(m => m.textureData?.paintTexture != null))
+        {
+            // 4.1 生成贴图路径（与材质同目录）
+            string texPath = Path.Combine(
+                Path.GetDirectoryName(matPath),$"TEX_{layer.layerName}{map.mapName}.png"//$"{Path.GetFileNameWithoutExtension(matPath)}
+            );
+            
+            // 4.2 直接保存paintTexture（已确保可读写）
+            byte[] pngData = map.textureData.paintTexture.EncodeToPNG();
+            File.WriteAllBytes(texPath, pngData);
+            
+            // 4.3 更新材质引用
+            AssetDatabase.ImportAsset(texPath);
+            newMat.SetTexture(map.mapName, 
+                AssetDatabase.LoadAssetAtPath<Texture2D>(texPath));
+        }
+
+        // 保存的材质赋予目标对象
+        target_Renderer.sharedMaterial = newMat;
+
+        // 5. 保存材质
+        AssetDatabase.CreateAsset(newMat, matPath);
+        AssetDatabase.Refresh();
+        
+
+
+        // 6. 可视化反馈
+        EditorUtility.DisplayDialog("导出成功",
+            $"材质和贴图已保存到：\n{Path.GetDirectoryName(matPath)}", "确定");
+        EditorGUIUtility.PingObject(newMat);
+    }
+   
     private void ExportMergedMaterial()
     {
         if (baseRefMaterial == null || targetShader == null) return;
