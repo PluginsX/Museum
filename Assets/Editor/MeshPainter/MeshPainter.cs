@@ -119,6 +119,7 @@ public class MeshPainter : EditorWindow
 
     private static GameObject target_Object;// 目标对象
     private static Mesh target_Mesh;//目标对象的Mesh组件
+    private static float targetMinBounds;//目标对象最大Bounds长度
     private static Renderer target_Renderer;// 目标对象渲染器
     private static Material target_OriginalMaterial;// 目标对象原始材质
     private static Shader targetShader;//目标对象的Shader
@@ -707,21 +708,33 @@ public class MeshPainter : EditorWindow
         
         Event currentEvent = Event.current;
         HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
+
+        // 1. 计算笔刷世界大小,0-1 映射为绘制物体的跨度最大的轴尺寸
+        targetMinBounds = Mathf.Min(target_Mesh.bounds.extents.x,target_Mesh.bounds.extents.y,target_Mesh.bounds.extents.z);
+        float cursorSize = brushSize * targetMinBounds;
         
-        // 1. 计算笔刷世界大小
-        float worldSize = brushSize * Mathf.Max(
-            target_Mesh.bounds.extents.x, 
-            target_Mesh.bounds.extents.y, 
-            target_Mesh.bounds.extents.z);
-        
+
         // 2. 实时获取鼠标射线
         Ray worldRay = HandleUtility.GUIPointToWorldRay(currentEvent.mousePosition);
-        bool isHitTarget = Physics.Raycast(worldRay, out RaycastHit hit) && hit.collider.gameObject == target_Object;
-        
+        bool isHitTarget = false;
+        RaycastHit hit = new RaycastHit();
+
+        // 只检测目标对象的MeshCollider
+        if (target_Object.TryGetComponent<MeshCollider>(out MeshCollider targetCollider))
+        {
+            // 对目标对象的碰撞体单独进行射线检测
+            if (targetCollider.Raycast(worldRay, out hit, Mathf.Infinity))
+            {
+                isHitTarget = true;
+            }
+        }
+
         // 3. 始终绘制光标（改进：即使未命中目标也显示光标在射线方向上）
         Vector3 cursorPosition = isHitTarget ? hit.point : worldRay.origin + worldRay.direction * 10f;
-        Handles.color = new Color(brushColor.r, brushColor.g, brushColor.b, isHitTarget ? 0.3f : 0.1f);
-        Handles.SphereHandleCap(0, cursorPosition, Quaternion.identity, worldSize, EventType.Repaint);
+        Handles.color = new Color(brushColor.r, brushColor.g, brushColor.b, isHitTarget ? 0.5f : 0.2f);
+        // 计算世界空间 1 米的 Handle 大小（自动适应摄像机距离）
+        float handleSize = HandleUtility.GetHandleSize(target_Object.transform.position) * 0.5f; // 调整系数使大小接近 1 米
+        Handles.SphereHandleCap(0, cursorPosition, Quaternion.identity, cursorSize*handleSize, EventType.Repaint);
         
         // 4. 处理绘制逻辑（改进：允许从任意位置开始拖动，命中模型时再绘制）
         if (!currentEvent.alt && !currentEvent.control && !currentEvent.shift)
@@ -760,7 +773,7 @@ public class MeshPainter : EditorWindow
             isMouseDragging = false;
         }
         
-        // 5. 鼠标抬起时重置状态 
+        // 5. 鼠标抬起时重置状态  
         if (currentEvent.type == EventType.MouseUp)
         {
             isMouseDragging = false;
@@ -1182,12 +1195,12 @@ public class MeshPainter : EditorWindow
                 break;
         }
     }
-
+ 
     private void DrawBrushSettings()
     {
         GUILayout.BeginVertical("box");
         brushColor = EditorGUILayout.ColorField("画笔颜色", brushColor);
-        brushSize = EditorGUILayout.Slider("画笔尺寸", brushSize, 0.01f, 1.0f);
+        brushSize = EditorGUILayout.Slider("画笔尺寸", brushSize, 0.0f, 1.0f);
         brushHardness = EditorGUILayout.Slider("画笔硬度", brushHardness, 0.0f, 1.0f);
         brushColor.a = EditorGUILayout.Slider("不透明度", brushColor.a, 0.01f, 1.0f);
         brushSpacing = EditorGUILayout.Slider("笔刷间距", brushSpacing, 0.0f, 1.0f);
@@ -1223,7 +1236,7 @@ public class MeshPainter : EditorWindow
         GUILayout.EndVertical();
     }
 
-    // ======================== 核心修改2：替换为旧版本可正常绘制的PaintOnTexture ========================
+    //======================== 核心修改2：替换为旧版本可正常绘制的PaintOnTexture ========================
     private void PaintOnTexture(RaycastHit hit)
     {
         // 1. 检查图层和贴图索引有效性
