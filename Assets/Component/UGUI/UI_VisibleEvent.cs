@@ -70,7 +70,6 @@ namespace Museum.Component.UGUI
 
         private void Update()
         {
-            //Log.Print("UI", "Debug", "Proportion: " + visibleProportion);
             if (viewPort == null || rectTransform == null)
                 return;
 
