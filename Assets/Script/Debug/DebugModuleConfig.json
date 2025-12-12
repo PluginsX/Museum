@@ -1,0 +1,24 @@
+{
+    "debugModules": [
+        {
+            "moduleName": "Default",
+            "isEnabled": false
+        },
+        {
+            "moduleName": "Input",
+            "isEnabled": false
+        },
+        {
+            "moduleName": "Camera",
+            "isEnabled": false
+        },
+        {
+            "moduleName": "UI",
+            "isEnabled": true
+        },
+        {
+            "moduleName": "Animation",
+            "isEnabled": true
+        }
+    ]
+}

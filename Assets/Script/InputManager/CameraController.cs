@@ -1,5 +1,6 @@
-using Unity.VisualScripting;
+
 using UnityEngine;
+using Museum.Debug;
 
 public class CameraController : MonoBehaviour
 {
@@ -34,33 +35,33 @@ public class CameraController : MonoBehaviour
     private Vector3 defaultCameraPosition;
     private Quaternion defaultCameraRotation;
 
-    // 旋转状态
+    // 旋转
     private float currentYaw;
     private float currentPitch;
     private float targetYaw;
     private float targetPitch;
 
-    // 缩放状态
+    // 缩放
     private float currentDistance;
     private float targetDistance;
 
-    // 平移状态
+    // 平移
     private Vector3 currentOffset;
     private Vector3 targetOffset;
 
     private void Awake()
     {
-        // 如果过没有明确指定控制摄像机，默认控制当前主摄像机
+        // 如果过没有明确指定控制摄像机，默认控制当前主摄像
         if (mainCamera == null)
         {
-            Debug.LogWarning("未指定控制摄像机，默认控制当前使用的摄像机");
+            Log.Print("Camera", "Warning", "未指定控制摄像机，默认控制当前使用的摄像");
             mainCamera = Camera.main;
         }
-            
-        // 如果没有指定注视目标，默认注视摄像机前方2M处
+
+        // 如果没有指定注视目标，默认注视摄像机前方2M
         if (targetObject == null)
         {
-            Debug.LogWarning("未指定注视目标，创建默认目标");
+            Log.Print("Camera", "Warning", "未指定注视目标，创建默认目标");
             targetObject = new GameObject("LookTarget");
             targetObject.transform.position = mainCamera.transform.position + mainCamera.transform.forward * 2f;
         }
@@ -78,7 +79,7 @@ public class CameraController : MonoBehaviour
         // 默认距离
         currentDistance = camDistance;
         targetDistance = camDistance;
-        // 获取摄像机启动旋转角度
+        // 获取摄像机启动旋转角
         Quaternion initialRotation = mainCamera.transform.rotation;
         // 当前角度
         currentYaw = initialRotation.eulerAngles.y;
@@ -108,20 +109,20 @@ public class CameraController : MonoBehaviour
         // 平滑位移
         currentOffset = Vector3.Lerp(currentOffset, targetOffset, panLerpSpeed * Time.deltaTime);
 
-        // 位移后要更新目标点的位置，始终保持目标点在摄象机正前方
+        // 位移后要更新目标点的位置，始终保持目标点在摄象机正前
         Vector3 targetPosition = targetObject.transform.position + currentOffset;
 
-        // 将以上对摄象机的变换，转换为围绕目标点的摄象机变换
+        // 将以上对摄象机的变换，转换为围绕目标点的摄象机变
         Quaternion rotation = Quaternion.Euler(currentPitch, currentYaw, 0);
         mainCamera.transform.position = targetPosition - rotation * Vector3.forward * currentDistance;
         mainCamera.transform.rotation = rotation;
     }
 
-    // 处理旋转事件（对应InputHandler的onRotate事件）
+    // 处理旋转事件（对应InputHandler的onRotate事件
     // 绑定到：InputHandler.onRotate
     public void OnRotate(Vector2 lastPos, Vector2 currentPos)
     {
-        if (debugMode) Debug.Log($"接收旋转输入: {currentPos} -> {lastPos}");
+        if (debugMode) Log.Print("Camera", "Debug", $"接收旋转输入: {currentPos} -> {lastPos}");
         
         Vector2 delta = currentPos - lastPos;
         
@@ -133,27 +134,27 @@ public class CameraController : MonoBehaviour
         targetPitch = Mathf.Clamp(targetPitch, MinPitch, MaxPitch);
     }
 
-    // 处理平移事件（对应InputHandler的onPan事件）
+    // 处理平移事件（对应InputHandler的onPan事件
     // 绑定到：InputHandler.onPan
     public void OnMove(Vector2 lastPos, Vector2 currentPos)
     {
-        if (debugMode) Debug.Log($"接收平移输入: {currentPos} -> {lastPos}");
+        if (debugMode) Log.Print("Camera", "Debug", $"接收平移输入: {currentPos} -> {lastPos}");
 
-        // 计算屏幕空间的拖动差值
+        // 计算屏幕空间的拖动差
         Vector2 delta = currentPos - lastPos;
 
-        // 获取摄像机的右方向和上方向（视口平面的两个轴）
+        // 获取摄像机的右方向和上方向（视口平面的两个轴
         Vector3 cameraRight = mainCamera.transform.right;
         Vector3 cameraUp = mainCamera.transform.up;
 
         // 计算平移向量：基于摄像机视口平面
-        // 注意：delta.x对应左右（摄像机右方为正），delta.y对应上下（摄像机上方为正）
+        // 注意：delta.x对应左右（摄像机右方为正），delta.y对应上下（摄像机上方为正
         // 负值是因为拖动方向与期望平移方向相反（向右拖动摄像机应向左移）（考虑当前距离，使平移速度更自然）
         Vector3 panDelta = -(delta.x * cameraRight + delta.y * cameraUp) * panSpeed * currentDistance;
-        // 计算新的偏移量
+        // 计算新的偏移
         Vector3 newOffset = targetOffset + panDelta;
 
-        // 应用边界限制（确保目标不超出屏幕边缘）
+        // 应用边界限制（确保目标不超出屏幕边缘
         // Vector3 newOffset = targetOffset + panDelta;
         // Vector3 targetScreenPos = mainCamera.WorldToScreenPoint(targetObject.transform.position + newOffset);
 
@@ -162,11 +163,11 @@ public class CameraController : MonoBehaviour
 
         // if (targetScreenPos.y >= screenEdgeMargin && targetScreenPos.y <= Screen.height - screenEdgeMargin)
         //     targetOffset.y = newOffset.y;
-        // 上或下
+        // 上或
         // if (IsOnScreen(targetObject,panDelta))
         //     targetOffset = newOffset;
 
-        // 更新目标偏移量
+        // 更新目标偏移
         targetOffset = newOffset;
 
     }
@@ -175,11 +176,11 @@ public class CameraController : MonoBehaviour
         return (screenPos.x > 0 && screenPos.x < 1 && screenPos.y > 0 && screenPos.y < 1 && screenPos.z > 0);
     }
     
-    // 处理缩放事件（对应InputHandler的onScale事件）
+    // 处理缩放事件（对应InputHandler的onScale事件
     // 绑定到：InputHandler.onScale
     public void OnScale(float scaleFactor)
     {
-        if (debugMode) Debug.Log($"接收缩放输入: {scaleFactor}");
+        if (debugMode) Log.Print("Camera", "Debug", $"接收缩放输入: {scaleFactor}");
         if(scaleFactor==0)
             return;
         
@@ -193,7 +194,7 @@ public class CameraController : MonoBehaviour
     // 绑定到：InputHandler.onSingleClick（可选）
     public void OnClick(Vector2 clickPosition)
     {
-        if (debugMode) Debug.Log($"接收单击: {clickPosition}");
+        if (debugMode) Log.Print("Camera", "Debug", $"接收单击: {clickPosition}");
         
         // 可添加单击逻辑，例如射线检测选中目标
         // Ray ray = mainCamera.ScreenPointToRay(clickPosition);
@@ -203,7 +204,7 @@ public class CameraController : MonoBehaviour
         // }
     }
 
-    // 重置摄像机到初始状态
+    // 重置摄像机到初始
     public void ResetCamera()
     {
         targetYaw = defaultCameraRotation.eulerAngles.y;
