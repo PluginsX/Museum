@@ -7,10 +7,10 @@ namespace Museum.Debug
         public static void Print(string category, string level, string message)
         {
             // 首先确保类别存在于配置中，如果不存在则自动添加并启用
-            DebugModuleConfig.EnsureModuleEnabled(category);
+            DebugMarkConfig.EnsureMarkEnabled(category);
 
             // 判断标签（类别）是否启用
-            if (DebugModuleConfig.IsModuleEnabled(category))
+            if (DebugMarkConfig.IsMarkEnabled(category))
             {
                 // 根据等级输出不同类型的日志
                 string logMessage = $"[{category}] {message}";

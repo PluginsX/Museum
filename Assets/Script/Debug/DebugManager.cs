@@ -11,50 +11,50 @@ namespace Museum.Debug
         /// <summary>
         /// 输出Debug信息（如果对应模块启用）
         /// </summary>
-        public static void Log(string moduleName, string message)
+        public static void Log(string MarkName, string message)
         {
-            if (DebugModuleConfig.IsModuleEnabled(moduleName))
+            if (DebugMarkConfig.IsMarkEnabled(MarkName))
             {
-                UnityEngine.Debug.Log($"[{moduleName}] {message}");
+                UnityEngine.Debug.Log($"[{MarkName}] {message}");
             }
         }
 
         /// <summary>
         /// 输出Warning信息（如果对应模块启用）
         /// </summary>
-        public static void LogWarning(string moduleName, string message)
+        public static void LogWarning(string MarkName, string message)
         {
-            if (DebugModuleConfig.IsModuleEnabled(moduleName))
+            if (DebugMarkConfig.IsMarkEnabled(MarkName))
             {
-                UnityEngine.Debug.LogWarning($"[{moduleName}] {message}");
+                UnityEngine.Debug.LogWarning($"[{MarkName}] {message}");
             }
         }
 
         /// <summary>
         /// 输出Error信息（如果对应模块启用）
         /// </summary>
-        public static void LogErrorMsg(string moduleName, string message)
+        public static void LogErrorMsg(string MarkName, string message)
         {
-            if (DebugModuleConfig.IsModuleEnabled(moduleName))
+            if (DebugMarkConfig.IsMarkEnabled(MarkName))
             {
-                UnityEngine.Debug.LogError($"[{moduleName}] {message}");
+                UnityEngine.Debug.LogError($"[{MarkName}] {message}");
             }
         }
 
         /// <summary>
         /// 无条件输出（总是输出，用于关键信息）
         /// </summary>
-        public static void LogAlways(string moduleName, string message)
+        public static void LogAlways(string MarkName, string message)
         {
-            UnityEngine.Debug.Log($"[{moduleName}] {message}");
+            UnityEngine.Debug.Log($"[{MarkName}] {message}");
         }
 
         /// <summary>
         /// 检查模块是否启用
         /// </summary>
-        public static bool IsModuleEnabled(string moduleName)
+        public static bool IsMarkEnabled(string MarkName)
         {
-            return DebugModuleConfig.IsModuleEnabled(moduleName);
+            return DebugMarkConfig.IsMarkEnabled(MarkName);
         }
     }
 }

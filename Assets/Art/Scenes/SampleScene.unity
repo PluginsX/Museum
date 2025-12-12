@@ -8463,7 +8463,7 @@ MonoBehaviour:
   clip: {fileID: 7400000, guid: 80ce5c9a65a24c449b1d719a7d038935, type: 2}
   speed: 1
   startRatio: 0
-  autoPlay: 1
+  autoPlay: 0
   loop: 0
   loopType: 0
 --- !u!114 &1726036634
@@ -8740,7 +8740,7 @@ MonoBehaviour:
   clip: {fileID: 7400000, guid: 80ce5c9a65a24c449b1d719a7d038935, type: 2}
   speed: 1
   startRatio: 0
-  autoPlay: 1
+  autoPlay: 0
   loop: 0
   loopType: 0
 --- !u!1 &2005684490
