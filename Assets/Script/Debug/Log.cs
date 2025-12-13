@@ -6,6 +6,7 @@ namespace Museum.Debug
     {
         public static void Print(string category, string level, string message)
         {
+            #if UNITY_EDITOR||UNITY_DEVELOPMENT_BUILD
             // 首先确保类别存在于配置中，如果不存在则自动添加并启用
             DebugMarkConfig.EnsureMarkEnabled(category);
 
@@ -30,6 +31,7 @@ namespace Museum.Debug
                         break;
                 }
             }
+            #endif
         }
     }
 }

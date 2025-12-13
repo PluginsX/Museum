@@ -1,0 +1,63 @@
+body {
+    padding: 0;
+    margin: 0
+}
+
+#unity-container {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+#unity-canvas {
+    width: 100%;
+    height: 100%;
+    background: #000000
+}
+
+#unity-loading-bar {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: none
+}
+
+#unity-logo {
+    width: 20vw;
+    height: 20vw;
+    
+    background: url('soulflaw-logo-dark.gif') no-repeat center;
+    background-size: contain;
+}
+
+#unity-progress-bar-empty {
+    margin: auto;
+    margin-top: 5vw;
+    width: 50vw;
+    height: 2vw;
+    /* background: url('progress-bar-empty-dark.png') no-repeat center; */
+    border: solid 2px #fff;
+    border-radius: 1vw;
+    overflow: hidden;
+}
+
+#unity-progress-bar-full {
+    position: relative;
+    left: 0;
+    top: 0;
+    width: 0%;
+    height: 2vw;
+    /* background: url('progress-bar-full-dark.png') no-repeat center */
+    background-color: #fff;
+}
+
+#unity-warning {
+    position: absolute;
+    left: 50%;
+    top: 5%;
+    transform: translate(-50%);
+    background: white;
+    padding: 10px;
+    display: none
+}
