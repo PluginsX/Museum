@@ -1,11 +1,13 @@
-const cacheName = "SoulFlaw-Museum-0.1.0";
+const cacheName = "SoulFlaw-Museum-1.0.0-" + Date.now();
 const contentToCache = [
     "Build/Build.loader.js",
     "Build/Build.framework.js.unityweb",
     "Build/Build.data.unityweb",
     "Build/Build.wasm.unityweb",
-    "TemplateData/style.css"
-
+    "TemplateData/style.css",
+    "TemplateData/favicon.ico",
+    "TemplateData/progress-bar-full-dark.png",
+    "TemplateData/progress-bar-full-light.png"
 ];
 
 self.addEventListener('install', function (e) {
