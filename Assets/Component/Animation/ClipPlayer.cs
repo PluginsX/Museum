@@ -1,15 +1,8 @@
 using UnityEngine;
 using Museum.Debug;
 
-namespace Museum.Component
+namespace Museum.Component.Animation
 {
-    // 循环方式
-    enum LoopType
-    {
-        Loop,
-        PingPong
-    }
-
     /// <summary>
     /// AnimationClip 播放器组件
     /// 支持自定义速度、起始位置、播放控制
@@ -34,12 +27,10 @@ namespace Museum.Component
         [Tooltip("自动开始播放")]
         [SerializeField]
         private bool autoPlay = false;
-        [Tooltip("是否循环播放")]
-        [SerializeField]
-        private bool loop = false;
+
         [Tooltip("循环播放方式")]
         [SerializeField]
-        private LoopType loopType = LoopType.Loop;
+        private LoopType loopType = LoopType.Repeat;
 
 
         
@@ -167,11 +158,11 @@ namespace Museum.Component
                     // 正向播放
                     if (currentTime >= clipLength)
                     {
-                        if (loop)
+                        if (loopType != LoopType.None)
                         {
                             switch (loopType)
                             {
-                                case LoopType.Loop:
+                                case LoopType.Repeat:
                                     currentTime = 0;
                                     Log.Print("Animation", "Debug", "ClipPlayer 循环播放: 重置到开始");
                                     break;
@@ -197,11 +188,11 @@ namespace Museum.Component
                     // 反向播放
                     if (currentTime < 0)
                     {
-                        if (loop)
+                        if (loopType != LoopType.None)
                         {
                             switch (loopType)
                             {
-                                case LoopType.Loop:
+                                case LoopType.Repeat:
                                     currentTime = clipLength;
                                     Log.Print("Animation", "Debug", "ClipPlayer 循环播放: 重置到末尾");
                                     break;

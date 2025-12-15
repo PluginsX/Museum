@@ -1,7 +1,7 @@
 using UnityEngine;
 using Museum.Debug;
 
-namespace Museum.Component.UGUI
+namespace Museum.Component.Animation
 {
     /// <summary>
     /// UI 动画播放控制组件
