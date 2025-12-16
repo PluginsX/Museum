@@ -14,9 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   debugMarks:
   - MarkName: Default
-    isEnabled: 1
+    isEnabled: 0
   - MarkName: UI
-    isEnabled: 1
+    isEnabled: 0
   - MarkName: Animation
     isEnabled: 1
-  autoAddNewMarks: 0
+  - MarkName: Input
+    isEnabled: 0
+  - MarkName: Camera
+    isEnabled: 0
+  autoAddNewMarks: 1

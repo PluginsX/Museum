@@ -51,5 +51,8 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "Museum.sln"
+    "dotnet.defaultSolution": "Museum.sln",
+    "codingcopilot.enableCompletionLanguage": {
+        "scmInput": false
+    }
 }

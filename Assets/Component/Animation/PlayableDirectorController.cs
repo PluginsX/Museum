@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
 using System.Collections.Generic;
+using Museum.Debug;
 using Museum.Component.Animation;
 
 namespace Museum.Component.Animation
@@ -178,20 +179,27 @@ public class PlayableDirectorController : MonoBehaviour
     }
 
     // 核心方法：跳转到指定比例对应时间并强制采样
-    public void JumpToTimeByRatio(float Ratio)
+    public void JumpToTimeByRatio(float proportion)
     {
         if (playableDirector == null) return;
-
+        
+        // 调试日志：记录传入的比例参数和当前duration
+        Log.Print("Animation", "Debug", $"JumpToTimeByRatio called with proportion: {proportion}, current duration: {duration}");
+        
+        ManualControl = true;
         // 停止播放
         isPlaying = false;
         // 限制比例范围
-        Ratio = Mathf.Clamp(Ratio, 0f, 1f);
+        proportion = Mathf.Clamp(proportion, 0f, 1f);
         // 计算对应的时间点
-        float time = Ratio * duration;
+        float time = proportion * duration;
         
-        // 处理边界情况：当Ratio为1时，将时间设置为略小于duration的值
+        // 调试日志：记录计算出的时间
+        Log.Print("Animation", "Debug", $"Calculated time: {time}, clamped proportion: {proportion}");
+        
+        // 处理边界情况：当比例为1时，将时间设置为略小于duration的值
         // 因为Unity Timeline的有效范围是[0, duration)，不包括duration本身
-        if (Ratio >= 1f && duration > 0)
+        if (proportion >= 1f && duration > 0)
         {
             time = duration - 0.001f;
         }
@@ -204,6 +212,12 @@ public class PlayableDirectorController : MonoBehaviour
         // 设置时间并强制采样
         playableDirector.time = time;
         playableDirector.Evaluate();
+        
+        // 更新CurrentRatio以反映当前状态
+        CurrentRatio = proportion;
+        
+        // 调试日志：记录最终设置的时间
+        Log.Print("Animation", "Debug", $"Final time set: {playableDirector.time}");
     }
 
     // 播放控制API

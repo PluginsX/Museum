@@ -123,6 +123,9 @@ namespace Museum.Component.UGUI
             }
 
             visibleProportion = Mathf.Clamp01(visibleProportion);
+            
+            // 调试日志：记录计算出的可见比例
+            Log.Print("UI", "Debug", $"CalculateVisibleProportion: {visibleProportion}");
         }
 
         /// <summary>
