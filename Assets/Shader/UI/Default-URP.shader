@@ -1,41 +1,61 @@
-// URP管线下UGUI Mask兼容测试Shader
-// 最终最终版：解决_Time重定义 + 未识别宏 + _StencilComp未声明
-Shader "Custom/UGUI/Default-URP-Test"
+// URP专属UGUI Image最小化Shader模板
+// 兼容Mask、RectMask2D、Sprite图集、颜色叠加、透明度处理等所有UGUI核心功能
+Shader "Custom/UGUI/Default-URP"
 {
     Properties
     {
+        // 主纹理：PerRendererData标签支持每个Image独立设置纹理（含图集）
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
+        // 颜色叠加：对应Image的Color属性
         _Color ("Tint", Color) = (1,1,1,1)
         
         // -------------------------- 模板测试参数（Mask遮罩核心） --------------------------
+        // 默认值与UGUI原生一致：CompareFunction.Equal (8)
         _StencilComp ("Stencil Comparison", Float) = 8
+        // 模板ID：与Mask组件的Stencil ID对应
         _Stencil ("Stencil ID", Float) = 0
+        // 默认值：StencilOp.Keep (0)
         _StencilOp ("Stencil Operation", Float) = 0
+        // 写入掩码：0-255，默认全写
         _StencilWriteMask ("Stencil Write Mask", Float) = 255
+        // 读取掩码：0-255，默认全读
         _StencilReadMask ("Stencil Read Mask", Float) = 255
         
         // -------------------------- 深度与混合参数（UGUI原生默认值） --------------------------
+        // UGUI默认关闭深度写入
         _ZWrite ("Z Write", Float) = 0
+        // 默认值：CompareFunction.LessEqual (8)
         _ZTest ("Z Test", Float) = 8
+        // 默认值：BlendMode.SrcAlpha (5)
         _BlendSrc ("Blend Src", Float) = 5
+        // 默认值：BlendMode.OneMinusSrcAlpha (10)
         _BlendDst ("Blend Dst", Float) = 10
         
         // 可选：透明度硬裁剪阈值（应对Alpha Cut场景）
         _Cutoff ("Alpha Cutoff", Range(0, 1)) = 0.5
         
-        // 颜色掩码（UGUI标准属性，控制颜色写入）
+        // 可选：颜色掩码（UGUI标准属性）
         _ColorMask ("Color Mask", Float) = 15
+        
+        // Mask专用：是否使用Alpha裁剪（Mask对象通常需要禁用以确保透明像素能写入模板缓冲区）
+        [MaterialToggle] _UseUIAlphaClip ("Use Alpha Clip", Float) = 1
     }
     
     SubShader
     {
         Tags
         {
+            // UGUI透明渲染队列（与原生UI对齐）
             "Queue" = "Transparent"
+            // 忽略投影器（UGUI默认）
             "IgnoreProjector" = "True"
+            // 透明渲染类型（后处理/批处理识别）
             "RenderType" = "Transparent"
+            // Sprite预览类型（编辑器中显示正确预览）
             "PreviewType" = "Plane"
+            // 支持Sprite图集批处理（UGUI必备）
             "CanUseSpriteAtlas" = "True"
+            // 标记为URP管线专属（必加）
             "RenderPipeline" = "UniversalPipeline"
         }
         
@@ -53,88 +73,91 @@ Shader "Custom/UGUI/Default-URP-Test"
         Blend [_BlendSrc] [_BlendDst]
         ZWrite [_ZWrite]
         ZTest [_ZTest]
+        // 禁用背面裁剪（Sprite可能有双面渲染需求）
         Cull Off
+        // 禁用光照（UGUI是2D UI，无需光照）
         Lighting Off
+        // 禁用雾效（UGUI默认）
         Fog { Mode Off }
+        // 关闭AlphaToMask（避免与透明度混合冲突）
         AlphaToMask Off
-        ColorMask [_ColorMask] // 应用颜色掩码，控制颜色写入
+        ColorMask [_ColorMask]
         
         Pass
         {
             Name "UGUI-Forward"
+            // URP 2D光照模式（无光照开销，适配UGUI）
             Tags { "LightMode" = "Universal2D" }
             
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            // 批量编译宏：支持RectMask2D裁剪
             #pragma multi_compile _ UNITY_UI_CLIP_RECT
+            // 批量编译宏：支持透明度硬裁剪
             #pragma multi_compile _ UNITY_UI_ALPHACLIP
             
-            // ==============================================
-            // 核心：全量宏屏蔽（阻止所有内置头文件的包含，解决_Time重定义）
-            // ==============================================
-            #define SHADER_VARIABLES_CGINC_INCLUDED 1
-            #define UNITY_CG_INCLUDED 1
-            #define UNITY_UI_CGINC_INCLUDED 1
-            #define TIME_CGINC_INCLUDED 1
-            #define HLSLSUPPORT_CGINC_INCLUDED 1
-            #define UNITY_SHADER_VARIABLES_CBUFFER 1
-            
-            // ==============================================
-            // 手动实现UI顶点变换函数（替代URP的TransformObjectToHClip）
-            // ==============================================
-            float4 UnityUI_ObjectToClipPos(float3 pos)
-            {
-                // UGUI正交投影的MVP变换（仅使用Unity自动提供的矩阵，无外部依赖）
-                float4 worldPos = mul(unity_ObjectToWorld, float4(pos, 1.0));
-                float4 clipPos = mul(unity_MatrixVP, worldPos);
-                return clipPos;
-            }
-            
-            // -------------------------- 顶点输入结构体 --------------------------
+            // -------------------------- 顶点输入结构体（兼容UGUI顶点格式） --------------------------
             struct appdata_t
             {
+                // 顶点位置（模型空间）
                 float4 vertex   : POSITION;
+                // 顶点颜色（UGUI Image的Color传递到这里）
                 float4 color    : COLOR;
+                // UV坐标
                 float2 texcoord : TEXCOORD0;
             };
             
             // -------------------------- 顶点输出结构体 --------------------------
             struct v2f
             {
+                // 裁剪空间顶点位置
                 float4 vertex   : SV_POSITION;
+                // 传递顶点颜色
                 fixed4 color    : COLOR;
+                // 传递UV坐标
                 half2 texcoord  : TEXCOORD0;
+                // 世界空间位置（用于RectMask2D裁剪）
                 float4 worldPosition : TEXCOORD1;
             };
             
-            // -------------------------- 声明属性变量（关键：补充Stencil相关变量） --------------------------
+            // -------------------------- 声明属性变量（与Properties对应） --------------------------
             sampler2D _MainTex;
+            // 纹理缩放和平移参数
             float4 _MainTex_ST;
+            // 颜色叠加参数
             float4 _Color;
+            // RectMask2D裁剪矩形参数（UGUI自动传入）
             float4 _ClipRect;
+            // 透明度裁剪阈值
             float _Cutoff;
+            // 是否使用Alpha裁剪
+            float _UseUIAlphaClip;
             
-            // ===== 新增：声明所有Stencil相关变量（与Properties一一对应） =====
-            float _StencilComp;
-            float _Stencil;
-            float _StencilOp;
-            float _StencilWriteMask;
-            float _StencilReadMask;
-            
-            // ===== 新增：声明深度/混合相关变量（若需要在着色器中使用，可选） =====
-            float _ZWrite;
-            float _ZTest;
-            float _BlendSrc;
-            float _BlendDst;
-            float _ColorMask;
-            
-            // -------------------------- 手动实现工具函数 --------------------------
+            // -------------------------- 手动实现核心工具函数 --------------------------
+            // 手动实现TRANSFORM_TEX宏
             #define TRANSFORM_TEX(tex, name) (tex.xy * name##_ST.xy + name##_ST.zw)
             
+            // 手动实现模型空间到裁剪空间的转换
+            float4 TransformObjectToClipPos(float3 pos)
+            {
+                // 手动实现MVP矩阵变换，避免使用Unity内置函数
+                float4x4 modelMatrix = unity_ObjectToWorld;
+                float4x4 viewMatrix = UNITY_MATRIX_V;
+                float4x4 projectionMatrix = UNITY_MATRIX_P;
+                
+                float4 worldPos = mul(modelMatrix, float4(pos, 1.0));
+                float4 viewPos = mul(viewMatrix, worldPos);
+                float4 clipPos = mul(projectionMatrix, viewPos);
+                
+                return clipPos;
+            }
+            
+            // RectMask2D裁剪函数（手动实现，避免UnityUI.cginc）
             inline fixed UnityGet2DClipping(float2 position, float4 clipRect)
             {
                 #ifdef UNITY_UI_CLIP_RECT
+                // 裁剪矩形：x=左, y=下, z=右, w=上
                 float2 inside = step(clipRect.xy, position.xy) * step(position.xy, clipRect.zw);
                 return inside.x * inside.y;
                 #else
@@ -147,9 +170,13 @@ Shader "Custom/UGUI/Default-URP-Test"
             {
                 v2f o;
                 
+                // 计算世界空间位置（用于RectMask2D裁剪）
                 o.worldPosition = v.vertex;
-                o.vertex = UnityUI_ObjectToClipPos(v.vertex.xyz); // 手动变换函数
+                // URP专属：模型空间转裁剪空间
+                o.vertex = TransformObjectToClipPos(v.vertex.xyz);
+                // 计算UV坐标（支持纹理缩放和平移）
                 o.texcoord = TRANSFORM_TEX(v.texcoord, _MainTex);
+                // 顶点颜色叠加（Image Color * 全局_Color）
                 o.color = v.color * _Color;
                 
                 return o;
@@ -158,26 +185,17 @@ Shader "Custom/UGUI/Default-URP-Test"
             // -------------------------- 片元着色器 --------------------------
             fixed4 frag(v2f i) : SV_Target
             {
+                // 1. 采样主纹理（Sprite/图集纹理）并叠加颜色
                 fixed4 color = tex2D(_MainTex, i.texcoord) * i.color;
+                
+                // 2. RectMask2D裁剪：剔除区域外的像素透明度
                 color.a *= UnityGet2DClipping(i.worldPosition.xy, _ClipRect);
                 
-                // Stencil枚举值定义
-                #define STENCIL_COMP_ALWAYS 0
-                #define STENCIL_OP_KEEP 0
-                
-                // 现在可以正常访问_StencilComp和_StencilOp了
-                bool isMaskObject = (_StencilComp < 0.5) && (_StencilOp > 0.5);
-                
-                if (isMaskObject)
-                {
-                    // Mask对象：忽略Alpha裁剪
-                }
-                else
-                {
-                    #ifdef UNITY_UI_ALPHACLIP
-                    clip(color.a - _Cutoff);
-                    #endif
-                }
+                // 3. 透明度硬裁剪（开启UNITY_UI_ALPHACLIP时生效）
+                #ifdef UNITY_UI_ALPHACLIP
+                if (_UseUIAlphaClip > 0.5)
+                clip(color.a - _Cutoff);
+                #endif
                 
                 return color;
             }
@@ -185,6 +203,6 @@ Shader "Custom/UGUI/Default-URP-Test"
         }
     }
     
-    // 可选：使用URP的空Shader作为FallBack（无依赖）
-    // FallBack "Hidden/Universal Render Pipeline/Empty"
+    // 降级处理：Shader不支持时，使用UGUI原生的UI/Default
+    FallBack "UI/Default"
 }
