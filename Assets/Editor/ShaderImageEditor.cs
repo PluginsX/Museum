@@ -338,6 +338,16 @@ namespace Museum.Component.UGUI
             if (state == PlayModeStateChange.EnteredEditMode)
             {
                 shaderImage.UpdateShader();
+
+                // 强制刷新Image组件，确保最新参数立即生效
+                Image imageComponent = shaderImage.GetComponent<Image>();
+                if (imageComponent != null && shaderImage.MaterialInstance != null)
+                {
+                    imageComponent.SetMaterialDirty();
+                    // 强制重新应用材质，确保绘制正确
+                    imageComponent.material = shaderImage.MaterialInstance;
+                }
+
                 RefreshSerializedState(true);
             }
 
@@ -375,14 +385,38 @@ namespace Museum.Component.UGUI
                         {
                             float currentValue = shaderImage.MaterialInstance.GetFloat(property.name);
 
-                            // 显示参数名
-                            EditorGUILayout.LabelField(property.name, labelStyle, GUILayout.Width(120));
-
                             // 只有标记为修改的参数才能编辑
                             bool wasEnabled = GUI.enabled;
                             GUI.enabled = isMarkedModified;
 
-                            // 使用FloatField，支持拖拽调整（类似原版inspector）
+                            // 自定义布局支持拖拽参数名调整值
+                            EditorGUILayout.BeginHorizontal();
+
+                            // 参数名标签，支持拖拽调整值
+                            Rect labelRect = GUILayoutUtility.GetRect(new GUIContent(property.name), labelStyle, GUILayout.Width(120));
+                            EditorGUI.LabelField(labelRect, property.name, labelStyle);
+
+                            // 处理拖拽事件
+                            if (isMarkedModified && Event.current.type == EventType.MouseDrag && labelRect.Contains(Event.current.mousePosition))
+                            {
+                                float dragDelta = Event.current.delta.x * 0.01f; // 调整灵敏度
+                                currentValue += dragDelta;
+                                shaderImage.MaterialInstance.SetFloat(property.name, currentValue);
+                                shaderImage.UpdateMaterialPropertiesList();
+                                EditorUtility.SetDirty(shaderImage);
+                                ((Image)shaderImage.GetComponent(typeof(Image))).SetMaterialDirty();
+
+                                // 运行时参数修改通知，触发保存状态更新
+                                if (Application.isPlaying)
+                                {
+                                    shaderImage.NotifyRuntimeParameterChanged(property.name);
+                                }
+
+                                Event.current.Use();
+                                GUI.changed = true;
+                            }
+
+                            // 数值输入字段
                             float newValue = EditorGUILayout.FloatField(currentValue);
                             if (isMarkedModified && newValue != currentValue)
                             {
@@ -390,7 +424,15 @@ namespace Museum.Component.UGUI
                                 shaderImage.UpdateMaterialPropertiesList();
                                 EditorUtility.SetDirty(shaderImage);
                                 ((Image)shaderImage.GetComponent(typeof(Image))).SetMaterialDirty();
+
+                                // 运行时参数修改通知，触发保存状态更新
+                                if (Application.isPlaying)
+                                {
+                                    shaderImage.NotifyRuntimeParameterChanged(property.name);
+                                }
                             }
+
+                            EditorGUILayout.EndHorizontal();
 
                             GUI.enabled = wasEnabled;
                         }
@@ -415,6 +457,12 @@ namespace Museum.Component.UGUI
                                 shaderImage.UpdateMaterialPropertiesList();
                                 EditorUtility.SetDirty(shaderImage);
                                 ((Image)shaderImage.GetComponent(typeof(Image))).SetMaterialDirty();
+
+                                // 运行时参数修改通知，触发保存状态更新
+                                if (Application.isPlaying)
+                                {
+                                    shaderImage.NotifyRuntimeParameterChanged(property.name);
+                                }
                             }
 
                             GUI.enabled = wasEnabled;
@@ -440,6 +488,12 @@ namespace Museum.Component.UGUI
                                 shaderImage.UpdateMaterialPropertiesList();
                                 EditorUtility.SetDirty(shaderImage);
                                 ((Image)shaderImage.GetComponent(typeof(Image))).SetMaterialDirty();
+
+                                // 运行时参数修改通知，触发保存状态更新
+                                if (Application.isPlaying)
+                                {
+                                    shaderImage.NotifyRuntimeParameterChanged(property.name);
+                                }
                             }
 
                             GUI.enabled = wasEnabled;
@@ -465,6 +519,12 @@ namespace Museum.Component.UGUI
                                 shaderImage.UpdateMaterialPropertiesList();
                                 EditorUtility.SetDirty(shaderImage);
                                 ((Image)shaderImage.GetComponent(typeof(Image))).SetMaterialDirty();
+
+                                // 运行时参数修改通知，触发保存状态更新
+                                if (Application.isPlaying)
+                                {
+                                    shaderImage.NotifyRuntimeParameterChanged(property.name);
+                                }
                             }
 
                             GUI.enabled = wasEnabled;
@@ -694,4 +754,3 @@ namespace Museum.Component.UGUI
         }
     }
 }
-
