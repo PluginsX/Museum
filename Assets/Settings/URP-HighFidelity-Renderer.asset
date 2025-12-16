@@ -119,7 +119,7 @@ MonoBehaviour:
   iterations: 4
   downsample: 2
   enableMipMaps: 1
-  scale: 1
+  scale: 5
   offset: 1
   scaleBlurWith: 1
   scaleReferenceSize: 1080

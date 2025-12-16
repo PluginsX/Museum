@@ -626,6 +626,20 @@ namespace Museum.Component.UGUI
         {
             // 在运行时参数被修改时调用此方法来更新状态
             // 这个方法会在Editor中被调用来更新UI状态
+
+            // 在运行时标记参数为修改状态，并更新保存的值列表
+            if (Application.isPlaying && !markedModifiedProperties.Contains(propertyName))
+            {
+                markedModifiedProperties.Add(propertyName);
+                SyncSerializedMarksFromHash();
+
+                // 在运行时立即更新保存的值列表，确保同步状态检测正确
+                UpdateMaterialPropertiesList();
+
+#if UNITY_EDITOR
+                UnityEditor.EditorUtility.SetDirty(this);
+#endif
+            }
         }
 
         public string PersistentId
@@ -827,4 +841,3 @@ namespace Museum.Component.UGUI
 #endif
     }
 }
-

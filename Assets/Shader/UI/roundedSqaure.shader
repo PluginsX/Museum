@@ -45,7 +45,7 @@ Shader "Custom/roundedSquare"
 		
 		// -------------------------- 圆角相关参数 --------------------------
 		// 圆角半径（基于0-1的相对值）
-		_Radius ("Radius", Range (0, 0.5)) = 0.1
+		_Radius ("Radius", Range (0, 0.5)) = 0
 		
 		// 四个角独立控制
 		[MaterialToggle] _TR ("Top Right Corner", Float) = 1
@@ -57,7 +57,7 @@ Shader "Custom/roundedSquare"
 		[MaterialToggle] _Invert ("Invert", Float) = 0
 		
 		// 边框宽度（可选）
-		_BorderWidth ("Border Width", Range (0, 0.1)) = 0
+		_BorderWidth ("Border Width", Range (0, 0.5)) = 0
 		_BorderColor ("Border Color", Color) = (0,0,0,1)
 	}
 	
