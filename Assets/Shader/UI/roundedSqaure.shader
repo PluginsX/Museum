@@ -38,6 +38,11 @@ Shader "Custom/roundedSquare"
 		// 可选：颜色掩码（UGUI标准属性）
 		_ColorMask ("Color Mask", Float) = 15
 		
+		// Mask专用：是否使用Alpha裁剪（Mask对象通常需要禁用以确保透明像素能写入模板缓冲区）
+		[MaterialToggle] _UseUIAlphaClip ("Use Alpha Clip", Float) = 1
+		
+		
+		
 		// -------------------------- 圆角相关参数 --------------------------
 		// 圆角半径（基于0-1的相对值）
 		_Radius ("Radius", Range (0, 0.5)) = 0.1
@@ -96,6 +101,7 @@ Shader "Custom/roundedSquare"
 		Fog { Mode Off }
 		// 关闭AlphaToMask（避免与透明度混合冲突）
 		AlphaToMask Off
+		ColorMask [_ColorMask]
 		
 		Pass
 		{
@@ -157,6 +163,23 @@ Shader "Custom/roundedSquare"
 			float4 _ClipRect;
 			// 透明度裁剪阈值
 			float _Cutoff;
+			// Mask专用Alpha裁剪控制
+			float _UseUIAlphaClip;
+			
+			// -------------------------- 模板测试参数（与Properties对应） --------------------------
+			float _StencilComp;
+			float _Stencil;
+			float _StencilOp;
+			float _StencilWriteMask;
+			float _StencilReadMask;
+			
+			// -------------------------- 深度与混合参数（与Properties对应） --------------------------
+			float _ZWrite;
+			float _ZTest;
+			float _BlendSrc;
+			float _BlendDst;
+			float _ColorMask;
+			
 			
 			// -------------------------- 手动实现UnityUI.cginc中的函数 --------------------------
 			// 2. 替代UnityUI.cginc中的UnityGet2DClipping函数（RectMask2D裁剪核心）
@@ -347,16 +370,19 @@ Shader "Custom/roundedSquare"
 					finalColor = lerp(finalColor, _BorderColor, isInnerBorder);
 				}
 				
-				// 3. RectMask2D裁剪：剔除区域外的像素透明度
-				finalColor.a *= UnityGet2DClipping(IN.worldPosition.xy, _ClipRect);
+				// 应用圆角遮罩
+				finalColor.a *= show;
 				
-				// 4. 透明度硬裁剪（开启UNITY_UI_ALPHACLIP时生效）
-				#ifdef UNITY_UI_ALPHACLIP
-				clip(finalColor.a - _Cutoff);
+				// RectMask2D裁剪
+				#ifdef UNITY_UI_CLIP_RECT
+				finalColor.a *= UnityGet2DClipping(IN.worldPosition.xy, _ClipRect);
 				#endif
 				
-				// 应用圆角可见性
-				finalColor.a *= show;
+				// 透明度硬裁剪
+				#ifdef UNITY_UI_ALPHACLIP
+				if (_UseUIAlphaClip > 0.5)
+				clip(finalColor.a - _Cutoff);
+				#endif
 				
 				return finalColor;
 			}

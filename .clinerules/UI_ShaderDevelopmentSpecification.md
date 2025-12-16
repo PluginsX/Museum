@@ -132,6 +132,9 @@ Shader "Custom/UGUI/URP-Image-Custom"
         // 可选：颜色掩码（UGUI标准属性）
         _ColorMask ("Color Mask", Float) = 15
 
+        // Mask专用：是否使用Alpha裁剪（Mask对象通常需要禁用以确保透明像素能写入模板缓冲区）
+        [MaterialToggle] _UseUIAlphaClip ("Use Alpha Clip", Float) = 1
+
         // -------------------------- 自定义扩展参数（示例：渐变颜色） --------------------------
         // 可根据需求添加自定义参数，如渐变、描边、纹理混合等
         _GradientColor ("Gradient Color", Color) = (1,1,1,1)
@@ -364,10 +367,95 @@ Shader "Custom/UGUI/URP-Image-Custom"
 2. 简化顶点/片元逻辑：避免在片元着色器中执行复杂的数学运算，可将部分计算移至顶点着色器；
 3. 移除PixelSnap相关宏：如果不需要像素对齐功能，可移除`#pragma multi_compile _ PIXELSNAP_ON`以减少编译变体。
 
-### 6.3 常见问题解决
+### 6.3 Mask遮罩兼容性实现
+要让自定义Shader支持作为Mask遮罩其他UI对象，需实现以下关键特性：
+
+#### 6.3.1 添加Mask专用参数
+```shaderlab
+// Mask专用：是否使用Alpha裁剪（Mask对象通常需要禁用以确保透明像素能写入模板缓冲区）
+[MaterialToggle] _UseUIAlphaClip ("Use Alpha Clip", Float) = 1
+```
+
+#### 6.3.2 条件化Alpha裁剪逻辑
+```glsl
+// 透明度硬裁剪（根据_UseUIAlphaClip参数控制，Mask对象通常需要禁用）
+#ifdef UNITY_UI_ALPHACLIP
+if (_UseUIAlphaClip > 0.5)
+{
+    clip(color.a - _Cutoff);
+}
+#endif
+```
+
+#### 6.3.3 Mask专用Pass（圆角矩形专用）
+圆角矩形Shader包含专门的Mask Pass，根据圆角形状精确控制模板写入：
+
+```shaderlab
+Pass
+{
+    Name "Mask"
+    Tags { "LightMode" = "SRPDefaultUnlit" }
+
+    Stencil
+    {
+        Ref [_Stencil]
+        Comp Always
+        Pass Replace
+        ReadMask [_StencilReadMask]
+        WriteMask [_StencilWriteMask]
+    }
+
+    ColorMask 0  // 不写入颜色缓冲区
+    ZWrite Off
+
+    // 在片元着色器中根据圆角可见性discard像素
+}
+```
+
+#### 6.3.4 Mask对象使用指南
+
+**方法一：手动配置（推荐用于复杂场景）**
+1. **添加组件**：为Image添加Unity标准`Mask`组件
+2. **材质设置**：
+   - "Use Alpha Clip"选项关闭
+   - 在材质检查器中设置Stencil参数：
+     - Stencil Comp: Always (8)
+     - Stencil Pass: Replace (3)
+     - ColorMask: 0
+3. **对象配置**：设置Mask对象的`Color.a = 0`（使其不可见但仍生效）
+4. **被遮罩对象**：确保`Maskable`属性为true
+
+**配置说明**
+1. **添加组件**：为Image添加Unity标准`Mask`组件
+2. **材质设置**：
+   - "Use Alpha Clip"选项关闭（禁用）
+   - 在材质检查器中手动设置Stencil参数：
+     - Stencil Comp: Always (8)
+     - Stencil Pass: Replace (3)
+
+#### 6.3.5 渲染顺序控制
+确保Mask对象在被遮罩对象之前渲染：
+- 方法1：调整Canvas的`Order in Layer`
+- 方法2：调整UI对象的Sibling Index
+- 方法3：使用不同的Canvas
+
+#### 6.3.6 圆角Mask特性
+圆角矩形作为Mask时，具有以下特性：
+- **精确遮罩**：遮罩形状完全遵循圆角设置
+- **动态调整**：修改圆角参数会实时影响遮罩形状
+- **性能优化**：只在圆角区域内写入模板缓冲区
+
+#### 6.3.7 工作原理
+- Mask对象渲染时根据圆角逻辑决定哪些像素写入模板缓冲区
+- 圆角外的像素被discard，不写入模板
+- 被遮罩对象只在模板缓冲区有值的区域内渲染
+- 通过模板测试实现精确的圆角遮罩效果
+
+### 6.4 常见问题解决
 1. **`_Time`重定义错误**：确认已添加屏蔽宏`SHADER_VARIABLES_CGINC_INCLUDED`和`UNITY_CG_INCLUDED`，或直接注释掉`UnityUI.cginc`；
 2. **RectMask2D裁剪失效**：检查`_ClipRect`参数是否由UGUI自动传入，且`UnityGet2DClipping`函数逻辑正确；
-3. **Sprite图集批处理失效**：确认Shader的Tags中包含`CanUseSpriteAtlas = "True"`，且`_MainTex`带有`[PerRendererData]`标签。
+3. **Sprite图集批处理失效**：确认Shader的Tags中包含`CanUseSpriteAtlas = "True"`，且`_MainTex`带有`[PerRendererData]`标签；
+4. **Mask遮罩无效**：检查`_UseUIAlphaClip`参数设置，Mask对象应设为false，被遮罩对象应设为true。
 
 ## 七、总结
 本文从UGUI核心功能兼容原理与URP管线适配要点出发，实现了一份**完全兼容URP管线与UGUI Image所有核心功能**的自定义Shader模板。该模板解决了URP下常见的变量重定义、功能不兼容问题，同时预留了自定义效果扩展的入口，可作为URP项目中UGUI Image定制化开发的基础模板。
