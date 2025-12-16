@@ -367,89 +367,151 @@ Shader "Custom/UGUI/URP-Image-Custom"
 2. 简化顶点/片元逻辑：避免在片元着色器中执行复杂的数学运算，可将部分计算移至顶点着色器；
 3. 移除PixelSnap相关宏：如果不需要像素对齐功能，可移除`#pragma multi_compile _ PIXELSNAP_ON`以减少编译变体。
 
-### 6.3 Mask遮罩兼容性实现
-要让自定义Shader支持作为Mask遮罩其他UI对象，需实现以下关键特性：
+### 6.3 Mask遮罩兼容性实现（最新标准方法）
 
-#### 6.3.1 添加Mask专用参数
+#### 6.3.1 标准兼容原理
+UGUI的Mask系统通过自动配置Stencil参数实现遮罩功能，Shader**无需**复杂的Mask对象检测或专用Pass。正确的实现方式：
+
+1. **提供Stencil参数接口**：在Properties中声明所有Stencil相关参数
+2. **SubShader级别Stencil设置**：使用Properties中的变量设置模板测试
+3. **正常计算Alpha值**：在片元着色器中正常计算alpha（包括自定义遮罩效果）
+4. **UGUI自动处理**：Mask组件会自动修改Stencil参数配置Mask行为
+
+#### 6.3.2 正确的Properties配置
 ```shaderlab
-// Mask专用：是否使用Alpha裁剪（Mask对象通常需要禁用以确保透明像素能写入模板缓冲区）
-[MaterialToggle] _UseUIAlphaClip ("Use Alpha Clip", Float) = 1
-```
-
-#### 6.3.2 条件化Alpha裁剪逻辑
-```glsl
-// 透明度硬裁剪（根据_UseUIAlphaClip参数控制，Mask对象通常需要禁用）
-#ifdef UNITY_UI_ALPHACLIP
-if (_UseUIAlphaClip > 0.5)
+Properties
 {
-    clip(color.a - _Cutoff);
+    [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
+    _Color ("Tint", Color) = (1,1,1,1)
+
+    // 标准Stencil参数（UGUI自动配置）
+    _StencilComp ("Stencil Comparison", Float) = 8
+    _Stencil ("Stencil ID", Float) = 0
+    _StencilOp ("Stencil Operation", Float) = 0
+    _StencilWriteMask ("Stencil Write Mask", Float) = 255
+    _StencilReadMask ("Stencil Read Mask", Float) = 255
+
+    _ColorMask ("Color Mask", Float) = 15
+    [MaterialToggle] _UseUIAlphaClip ("Use Alpha Clip", Float) = 1
+    _Cutoff ("Alpha Cutoff", Range(0,1)) = 0.001
+
+    // 自定义参数...
 }
-#endif
 ```
 
-#### 6.3.3 Mask专用Pass（圆角矩形专用）
-圆角矩形Shader包含专门的Mask Pass，根据圆角形状精确控制模板写入：
-
+#### 6.3.3 正确的SubShader配置
 ```shaderlab
-Pass
+SubShader
 {
-    Name "Mask"
-    Tags { "LightMode" = "SRPDefaultUnlit" }
+    Tags
+    {
+        "Queue"="Transparent"
+        "IgnoreProjector"="True"
+        "RenderType"="Transparent"
+        "PreviewType"="Plane"
+        "CanUseSpriteAtlas"="True"
+        "RenderPipeline"="UniversalPipeline"
+    }
 
+    // 标准Stencil设置（使用Properties变量）
     Stencil
     {
         Ref [_Stencil]
-        Comp Always
-        Pass Replace
+        Comp [_StencilComp]
+        Pass [_StencilOp]
         ReadMask [_StencilReadMask]
         WriteMask [_StencilWriteMask]
     }
 
-    ColorMask 0  // 不写入颜色缓冲区
+    Blend SrcAlpha OneMinusSrcAlpha
     ZWrite Off
+    ZTest LEqual
+    Cull Off
+    Lighting Off
+    Fog { Mode Off }
+    AlphaToMask Off
+    ColorMask [_ColorMask]  // 支持颜色掩码
 
-    // 在片元着色器中根据圆角可见性discard像素
+    Pass
+    {
+        Tags { "LightMode"="Universal2D" }
+
+        CGPROGRAM
+        #pragma vertex vert
+        #pragma fragment frag
+        #pragma multi_compile _ UNITY_UI_CLIP_RECT
+        #pragma multi_compile _ UNITY_UI_ALPHACLIP
+
+        // ... 顶点着色器实现 ...
+
+        fixed4 frag (v2f i) : SV_Target
+        {
+            fixed4 col = tex2D(_MainTex, i.uv) * i.color;
+
+            // 应用自定义遮罩效果（圆角等）
+            half mask = CalculateCustomMask(i.uv);  // 圆角遮罩等自定义逻辑
+            col.a *= mask;
+
+            // RectMask2D裁剪
+            #ifdef UNITY_UI_CLIP_RECT
+            col.a *= UnityGet2DClipping(i.worldPos.xy, _ClipRect);
+            #endif
+
+            // 透明度硬裁剪
+            #ifdef UNITY_UI_ALPHACLIP
+            if (_UseUIAlphaClip > 0.5)
+            clip(col.a - _Cutoff);
+            #endif
+
+            return col;
+        }
+        ENDCG
+    }
 }
 ```
 
-#### 6.3.4 Mask对象使用指南
+#### 6.3.4 Mask工作机制说明
+- **Mask对象**：UGUI自动设置`Comp = Always, Pass = Replace`，自定义遮罩效果（如圆角）会影响模板缓冲区的写入形状
+- **被遮罩对象**：UGUI自动设置`Comp = Equal, Pass = Keep`，根据模板缓冲区内容被裁剪
+- **Shader职责**：仅提供Stencil参数接口和正常计算alpha值，UGUI处理具体的模板配置
 
-**方法一：手动配置（推荐用于复杂场景）**
-1. **添加组件**：为Image添加Unity标准`Mask`组件
-2. **材质设置**：
-   - "Use Alpha Clip"选项关闭
-   - 在材质检查器中设置Stencil参数：
-     - Stencil Comp: Always (8)
-     - Stencil Pass: Replace (3)
-     - ColorMask: 0
-3. **对象配置**：设置Mask对象的`Color.a = 0`（使其不可见但仍生效）
-4. **被遮罩对象**：确保`Maskable`属性为true
+#### 6.3.5 圆角Mask的正确实现
+对于圆角矩形Mask，无需专用Pass，正确的做法是在片元着色器中正常应用圆角遮罩：
 
-**配置说明**
-1. **添加组件**：为Image添加Unity标准`Mask`组件
-2. **材质设置**：
-   - "Use Alpha Clip"选项关闭（禁用）
-   - 在材质检查器中手动设置Stencil参数：
-     - Stencil Comp: Always (8)
-     - Stencil Pass: Replace (3)
+```glsl
+fixed4 frag (v2f i) : SV_Target
+{
+    fixed4 col = tex2D(_MainTex, i.uv) * i.color;
 
-#### 6.3.5 渲染顺序控制
-确保Mask对象在被遮罩对象之前渲染：
-- 方法1：调整Canvas的`Order in Layer`
-- 方法2：调整UI对象的Sibling Index
-- 方法3：使用不同的Canvas
+    // 计算圆角遮罩（会影响Mask的模板写入形状）
+    half cornerMask = CalculateRoundedCorners(i.uv);
+    col.a *= cornerMask;
 
-#### 6.3.6 圆角Mask特性
-圆角矩形作为Mask时，具有以下特性：
-- **精确遮罩**：遮罩形状完全遵循圆角设置
-- **动态调整**：修改圆角参数会实时影响遮罩形状
-- **性能优化**：只在圆角区域内写入模板缓冲区
+    // 其他标准处理...
+    #ifdef UNITY_UI_CLIP_RECT
+    col.a *= UnityGet2DClipping(i.worldPos.xy, _ClipRect);
+    #endif
 
-#### 6.3.7 工作原理
-- Mask对象渲染时根据圆角逻辑决定哪些像素写入模板缓冲区
-- 圆角外的像素被discard，不写入模板
-- 被遮罩对象只在模板缓冲区有值的区域内渲染
-- 通过模板测试实现精确的圆角遮罩效果
+    #ifdef UNITY_UI_ALPHACLIP
+    if (_UseUIAlphaClip > 0.5)
+    clip(col.a - _Cutoff);
+    #endif
+
+    return col;
+}
+```
+
+#### 6.3.6 使用指南
+1. **创建Mask**：为UI对象添加Unity标准`Mask`组件
+2. **材质设置**：使用支持Stencil参数的Shader，无需手动配置
+3. **遮罩形状**：通过Shader的自定义参数（如圆角半径）控制遮罩形状
+4. **被遮罩对象**：确保`Maskable`属性为true，会自动受到遮罩影响
+
+#### 6.3.7 重要提醒
+- **避免复杂实现**：不要添加专用Mask Pass或Mask对象检测逻辑
+- **避免discard**：Mask对象不应在片元着色器中discard像素
+- **避免透明返回**：Mask对象应正常显示，不要返回透明色
+- **UGUI自动处理**：相信UGUI的Mask系统，Shader只提供接口
 
 ### 6.4 常见问题解决
 1. **`_Time`重定义错误**：确认已添加屏蔽宏`SHADER_VARIABLES_CGINC_INCLUDED`和`UNITY_CG_INCLUDED`，或直接注释掉`UnityUI.cginc`；
