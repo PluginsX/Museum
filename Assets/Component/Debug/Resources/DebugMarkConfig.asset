@@ -18,9 +18,11 @@ MonoBehaviour:
   - MarkName: UI
     isEnabled: 0
   - MarkName: Animation
-    isEnabled: 1
+    isEnabled: 0
   - MarkName: Input
     isEnabled: 0
   - MarkName: Camera
     isEnabled: 0
-  autoAddNewMarks: 1
+  - MarkName: Video
+    isEnabled: 0
+  autoAddNewMarks: 0

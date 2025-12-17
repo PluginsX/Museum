@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Runtime.InteropServices;
 using UnityEngine.Events;
+using Museum.Debug;
 
 /// <summary>
 /// WebGL平台音频管理器（最终版）
@@ -121,7 +122,7 @@ public class WebGLAudioManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(fileName))
         {
-            Debug.LogError("[Audio] 音频文件名不能为空！");
+            Log.Print("Audio", "error", "音频文件名不能为空！");
             return "";
         }
 
@@ -142,7 +143,7 @@ public class WebGLAudioManager : MonoBehaviour
     /// <param name="audioKey">音频唯一标识</param>
     public void OnAudioEnded(string audioKey)
     {
-        Debug.Log($"[Audio] 音频播放完成：{audioKey}");
+        Log.Print("Audio", "debug", $"音频播放完成：{audioKey}");
         onAudioEnded?.Invoke(audioKey);
     }
 
@@ -151,7 +152,7 @@ public class WebGLAudioManager : MonoBehaviour
     /// </summary>
     public void OnAudioUnlocked()
     {
-        Debug.Log("[Audio] 音频上下文已解锁，可以正常播放音频");
+        Log.Print("Audio", "debug", "音频上下文已解锁，可以正常播放音频");
         // 这里可以添加音频解锁后的逻辑，比如自动播放背景音乐
         PlayCurrentAudio();
     }
@@ -181,7 +182,7 @@ public class WebGLAudioManager : MonoBehaviour
         JS_PlayAudio(path, loop ? 1 : 0, key);
 #else
         // 非WebGL平台：仅打印日志，方便调试
-        Debug.Log($"[Audio] 非WebGL平台，准备播放音频：{path}");
+        Log.Print("Audio", "debug", $"非WebGL平台，准备播放音频：{path}");
 #endif
     }
 
@@ -279,7 +280,7 @@ public class WebGLAudioManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(audioFileName))
         {
-            Debug.LogError("[Audio] 当前音频文件名未设置！");
+            Log.Print("Audio", "error", "当前音频文件名未设置！");
             return;
         }
         PlayAudio(audioFileName, isLoop, defaultAudioKey);
