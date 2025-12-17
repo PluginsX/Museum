@@ -14,6 +14,15 @@
     <div id="Custom_Cover" style="width:100vw;height:100vh;background-color:#000;text-align: center;position:absolute;z-index:999;display:none;">
         <div style="width:100vw;height:10vh;font-size:5vw;text-align:center;color:#fff;position:absolute;top:calc(50vh - 1vh);line-height:5vw;">SOULFLAW | 灵魂瑕疵 </div>
     </div>
+
+    <!-- 音频静音提示框 -->
+    <div id="audio-unmute-prompt" style="position: fixed; top: 20px; right: 20px; background: rgba(0, 0, 0, 0.8); color: white; padding: 15px; border-radius: 8px; font-family: Arial, sans-serif; font-size: 14px; z-index: 1000; max-width: 300px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); display: none;">
+        <div style="margin-bottom: 10px;">🎵 检测到音频内容，需要您的许可才能播放</div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button id="unmute-btn" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px;">解除静音</button>
+            <button id="dismiss-btn" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px;">稍后</button>
+        </div>
+    </div>
     <div id="unity-container">
         <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
         <div id="unity-loading-bar" style="width:100%;text-align:center;">
@@ -79,7 +88,114 @@
             element.style.animation = `${animationName} ${duration}ms ${timingFunction} forwards`;
         }
 
+        // 音频上下文和静音提示相关变量
+        var audioContext = null;
+        var unmutePrompt = document.getElementById('audio-unmute-prompt');
+        var unmuteBtn = document.getElementById('unmute-btn');
+        var dismissBtn = document.getElementById('dismiss-btn');
+        var hasUserInteracted = false;
+
+        // 初始化音频上下文
+        function initAudioContext() {
+            try {
+                // 创建音频上下文（兼容不同浏览器）
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    audioContext = new AudioContext();
+                    console.log('[Audio] 音频上下文已创建');
+                }
+            } catch (e) {
+                console.warn('[Audio] 无法创建音频上下文:', e);
+            }
+        }
+
+        // 激活音频上下文（通过播放无声音频）
+        function unlockAudio() {
+            if (!audioContext) {
+                initAudioContext();
+            }
+
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume().then(function() {
+                    console.log('[Audio] 音频上下文已激活');
+                    // 播放一个非常短的无声音频来激活音频
+                    var oscillator = audioContext.createOscillator();
+                    var gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                    oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.01);
+                }).catch(function(err) {
+                    console.warn('[Audio] 无法激活音频上下文:', err);
+                });
+            }
+        }
+
+        // 显示静音提示框
+        function showUnmutePrompt() {
+            if (unmutePrompt && !hasUserInteracted) {
+                unmutePrompt.style.display = 'block';
+                console.log('[Audio] 显示音频静音提示');
+            }
+        }
+
+        // 隐藏静音提示框
+        function hideUnmutePrompt() {
+            if (unmutePrompt) {
+                unmutePrompt.style.display = 'none';
+                console.log('[Audio] 隐藏音频静音提示');
+            }
+        }
+
+        // 监听用户交互
+        function setupUserInteractionListeners() {
+            // 监听任何用户交互
+            var events = ['click', 'touchstart', 'keydown', 'mousedown'];
+            events.forEach(function(event) {
+                document.addEventListener(event, function onFirstInteraction() {
+                    hasUserInteracted = true;
+                    document.removeEventListener(event, onFirstInteraction);
+                    console.log('[Audio] 检测到用户交互');
+                }, { once: true });
+            });
+
+            // 解除静音按钮
+            if (unmuteBtn) {
+                unmuteBtn.addEventListener('click', function() {
+                    unlockAudio();
+                    hideUnmutePrompt();
+                    // 通知Unity音频已解锁
+                    if (window.unityInstance && window.unityInstance.SendMessage) {
+                        window.unityInstance.SendMessage('AudioManager', 'OnAudioUnlocked');
+                    }
+                });
+            }
+
+            // 稍后按钮
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', function() {
+                    hideUnmutePrompt();
+                    // 可以设置一个定时器，稍后再次提示
+                    setTimeout(function() {
+                        if (!hasUserInteracted) {
+                            showUnmutePrompt();
+                        }
+                    }, 30000); // 30秒后再次提示
+                });
+            }
+        }
+
         window.addEventListener("load", function() {
+            // 初始化音频相关功能
+            initAudioContext();
+            setupUserInteractionListeners();
+
+            // 测试：立即显示提示框（用于调试）
+            console.log('[Audio] 页面加载完成，音频功能已初始化');
+            setTimeout(() => showUnmutePrompt(), 2000); // 调试用：2秒后显示
+
             if ("serviceWorker" in navigator) {
                 navigator.serviceWorker.register("ServiceWorker.js").then(function(registration) {
                     console.log('[SW] Registered successfully:', registration.scope);
@@ -159,6 +275,9 @@
             createUnityInstance(canvas, config, (progress) => {
                 progressBarFull.style.width = 100 * progress + "%";
             }).then((unityInstance) => {
+                // 保存Unity实例引用
+                window.unityInstance = unityInstance;
+
                 loadingBar.style.display = "none";
 
                 //播放自定义游戏封面
@@ -168,6 +287,11 @@
                         Custom_Cover.parentNode.removeChild(Custom_Cover);
                         console.log('已成功删除封面元素');
                     }
+
+                    // 封面动画结束后，显示音频静音提示
+                    setTimeout(function() {
+                        showUnmutePrompt();
+                    }, 1000); // 延迟1秒显示，避免与封面重叠
                 });
 
             }).catch((message) => {
