@@ -577,41 +577,53 @@ namespace Museum.Component.UGUI
 
             foreach (FloatProperty property in floatProperties)
             {
-                float currentValue = materialInstance.GetFloat(property.propertyName);
-                if (currentValue != property.value)
+                if (materialInstance.HasProperty(property.propertyName))
                 {
-                    materialInstance.SetFloat(property.propertyName, property.value);
-                    hasChanged = true;
+                    float currentValue = materialInstance.GetFloat(property.propertyName);
+                    if (currentValue != property.value)
+                    {
+                        materialInstance.SetFloat(property.propertyName, property.value);
+                        hasChanged = true;
+                    }
                 }
             }
 
             foreach (ColorProperty property in colorProperties)
             {
-                Color currentValue = materialInstance.GetColor(property.propertyName);
-                if (currentValue != property.value)
+                if (materialInstance.HasProperty(property.propertyName))
                 {
-                    materialInstance.SetColor(property.propertyName, property.value);
-                    hasChanged = true;
+                    Color currentValue = materialInstance.GetColor(property.propertyName);
+                    if (currentValue != property.value)
+                    {
+                        materialInstance.SetColor(property.propertyName, property.value);
+                        hasChanged = true;
+                    }
                 }
             }
 
             foreach (VectorProperty property in vectorProperties)
             {
-                Vector4 currentValue = materialInstance.GetVector(property.propertyName);
-                if (currentValue != property.value)
+                if (materialInstance.HasProperty(property.propertyName))
                 {
-                    materialInstance.SetVector(property.propertyName, property.value);
-                    hasChanged = true;
+                    Vector4 currentValue = materialInstance.GetVector(property.propertyName);
+                    if (currentValue != property.value)
+                    {
+                        materialInstance.SetVector(property.propertyName, property.value);
+                        hasChanged = true;
+                    }
                 }
             }
 
             foreach (TextureProperty property in textureProperties)
             {
-                Texture currentValue = materialInstance.GetTexture(property.propertyName);
-                if (currentValue != property.value)
+                if (materialInstance.HasProperty(property.propertyName))
                 {
-                    materialInstance.SetTexture(property.propertyName, property.value);
-                    hasChanged = true;
+                    Texture currentValue = materialInstance.GetTexture(property.propertyName);
+                    if (currentValue != property.value)
+                    {
+                        materialInstance.SetTexture(property.propertyName, property.value);
+                        hasChanged = true;
+                    }
                 }
             }
 

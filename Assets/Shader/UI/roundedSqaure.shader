@@ -1,4 +1,4 @@
-﻿Shader "Museum/UI/URP_WorldPos_Visualizer_Rounded_UV"
+﻿Shader "Museum/UI/roundedSqaure"
 {
     Properties
     {
@@ -186,7 +186,7 @@
                     float innerMask = saturate(1.0 - smoothstep(-aa, aa, dist + _BorderWidth));
                     float borderMask = saturate(fillMask - innerMask);
                     float3 borderColor = _BorderColor.rgb;
-                    float borderAlpha = _BorderColor.a;
+                    float borderAlpha = _BorderColor.a * i.color.a;
                     finalColor.rgb = lerp(finalColor.rgb, borderColor, borderMask);
                     finalColor.a = lerp(finalColor.a, borderAlpha * borderMask, borderMask);
                 }
