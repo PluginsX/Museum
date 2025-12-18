@@ -89,12 +89,10 @@ Shader "Universal Render Pipeline/Sand"
             
             // -------------------------------------
             // Unity defined keywords
-            #pragma multi_compile _ DIRLIGHTMAP_COMBINED
-            #pragma multi_compile _ LIGHTMAP_ON
             #pragma multi_compile_fog
             #pragma multi_compile_fragment _ DEBUG_DISPLAY
             
-            #pragma vertex LitPassVertexSimple
+            #pragma vertex LitPassVertex
             #pragma fragment LitSandPassFragment
             
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
@@ -150,14 +148,7 @@ Shader "Universal Render Pipeline/Sand"
                 
                 
                 InputData inputData;
-                inputData = (InputData)0;
-                inputData.positionWS = input.positionWS;
-                inputData.normalWS = input.normalWS;
-                inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
-                inputData.fogCoord = input.fogFactor;
-                inputData.shadowCoord = input.shadowCoord;
-                inputData.normalizedScreenSpaceUV = input.positionCS.xy;
-                inputData.shadowMask = CalculateShadowMask(input.positionWS);
+                InitializeInputData(input, surfaceData.normalTS, inputData);
                 
                 #ifdef _DBUFFER
                 ApplyDecalToSurfaceData(input.positionCS, surfaceData, inputData);
@@ -166,7 +157,7 @@ Shader "Universal Render Pipeline/Sand"
                 half4 color = UniversalFragmentPBR(inputData, surfaceData);
                 
                 color.rgb = MixFog(color.rgb, inputData.fogCoord);
-                color.a = OutputAlpha(color.a, _Surface, _Cutoff);
+                color.a = surfaceData.alpha;
                 
                 return color;
             }
