@@ -1,4 +1,4 @@
-Shader "UI/Custom/UI_GlassDistort"
+Shader "Museum/UI/UI_GlassDistort"
 {
     Properties
     {

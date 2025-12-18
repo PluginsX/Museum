@@ -1,4 +1,4 @@
-Shader "Universal Render Pipeline/Sand"
+Shader "Museum/Scene/Sand"
 {
     Properties
     {

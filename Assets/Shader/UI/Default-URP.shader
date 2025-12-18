@@ -1,6 +1,6 @@
 // URP专属UGUI Image最小化Shader模板
 // 兼容Mask、RectMask2D、Sprite图集、颜色叠加、透明度处理等所有UGUI核心功能
-Shader "Custom/UGUI/Default-URP"
+Shader "Museum/UI/Default-URP"
 {
     Properties
     {

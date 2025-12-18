@@ -1,4 +1,4 @@
-Shader "Custom/URP/Pseudo3DParticle"
+Shader "Museum/VFX/Pseudo3DParticle"
 {
     Properties
     {

@@ -1,4 +1,4 @@
-﻿Shader "Custom/UGUI/URP_WorldPos_Visualizer_Rounded_UV"
+﻿Shader "Museum/UI/URP_WorldPos_Visualizer_Rounded_UV"
 {
     Properties
     {
