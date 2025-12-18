@@ -120,13 +120,11 @@ namespace Museum.Component.Animation
             isPlaying = true;
         }
 
-        private void Awake()
-        {
-            InitializePlayer();
-        }
-
         private void Start()
         {
+            InitializePlayer();
+            hasStarted = true;
+
             if (autoPlay)
             {
                 Play();
@@ -136,7 +134,7 @@ namespace Museum.Component.Animation
 
         private void OnEnable()
         {
-            if (autoPlay && !isPlaying)
+            if (hasStarted && autoPlay && !isPlaying)
             {
                 Play();
                 Log.Print("UI", "Info", "ClipPlayer 组件重新启用，恢复自动播放");
@@ -217,6 +215,8 @@ namespace Museum.Component.Animation
                 ApplyCurrentTime();
             }
         }
+
+        private bool hasStarted = false;
 
         private void InitializePlayer()
         {

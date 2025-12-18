@@ -100,60 +100,52 @@ public class PlayableDirectorController : MonoBehaviour
 
     void Awake()
     {
-        loopCount = 0;
-        foreach (var setting in trackSettings)
+        hasAwakened = true;
+    }
+
+    void Start()
+    {
+        InitializeDirector();
+
+        if (playOnAwake && playableDirector != null)
         {
-            if (setting.track != null)
+            Play();
+        }
+    }
+
+    private bool hasAwakened = false;
+
+    private void InitializeDirector()
+    {
+        loopCount = 0;
+        if (trackSettings != null)
+        {
+            foreach (var setting in trackSettings)
             {
-                setting.track.muted = false; // 确保未静音
+                if (setting.track != null)
+                {
+                    setting.track.muted = false;
+                }
             }
         }
 
-        // 自动获取PlayableDirector组件
         if (playableDirector == null)
         {
             playableDirector = GetComponent<PlayableDirector>();
         }
 
-        // 配置播放器参数
-        if (playableDirector != null)
+        if (playableDirector == null)
         {
-            // 更新duration值
-            duration = (float)playableDirector.duration;
-            
-            // 取消PlayableDirector的唤醒时自动播放，避免播放冲突
-            playableDirector.playOnAwake = false;
-            
-            // 禁用PlayableDirector的内置循环功能，完全由自定义逻辑控制
-            playableDirector.extrapolationMode = DirectorWrapMode.Hold;
-            
-            playableDirector.Stop();
-            playableDirector.time = initialTime;
-            playableDirector.Evaluate();
+            Log.Print("Animation", "Error", "PlayableDirectorController 缺少 PlayableDirector 组件");
+            return;
         }
-    }
 
-    void Start()
-    {
-        // 再次确认PlayableDirector的初始化设置，确保万无一失
-        if (playableDirector != null)
-        {
-            // 再次取消PlayableDirector的唤醒时自动播放，避免播放冲突
-            playableDirector.playOnAwake = false;
-            
-            // 确保当前状态与设置一致
-            playableDirector.Stop();
-            playableDirector.time = initialTime;
-            // 确保禁用PlayableDirector的内置循环功能
-            playableDirector.extrapolationMode = DirectorWrapMode.Hold;
-            playableDirector.Evaluate();
-        }
-        
-        // 根据playOnAwake设置决定是否自动播放
-        if (playOnAwake && playableDirector != null)
-        {
-            Play();
-        }
+        duration = (float)playableDirector.duration;
+        playableDirector.playOnAwake = false;
+        playableDirector.extrapolationMode = DirectorWrapMode.Hold;
+        playableDirector.Stop();
+        playableDirector.time = initialTime;
+        playableDirector.Evaluate();
     }
 
     // 核心方法：跳转到指定时间并强制采样
