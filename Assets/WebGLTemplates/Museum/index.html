@@ -11,47 +11,30 @@
 </head>
 
 <body>
-    <div id="Custom_Cover" style="width:100vw;height:100vh;background-color:#000;text-align: center;position:absolute;z-index:999;display:none;">
-        <div style="width:100vw;height:10vh;font-size:5vw;text-align:center;color:#fff;position:absolute;top:calc(50vh - 1vh);line-height:5vw;">SOULFLAW | 灵魂瑕疵 </div>
+    <div id="Custom_Cover">
+        <div>SOULFLAW | 灵魂瑕疵 </div>
     </div>
 
     <!-- 音频静音提示框 -->
-    <div id="audio-unmute-prompt" style="position: fixed; top: 20px; right: 20px; background: rgba(0, 0, 0, 0.8); color: white; padding: 15px; border-radius: 8px; font-family: Arial, sans-serif; font-size: 14px; z-index: 1000; max-width: 300px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); display: none;">
-        <div style="margin-bottom: 10px;">🎵 检测到音频内容，需要您的许可才能播放</div>
-        <div style="display: flex; gap: 10px; justify-content: flex-end;">
-            <button id="unmute-btn" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px;">解除静音</button>
-            <button id="dismiss-btn" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px;">稍后</button>
+    <div id="audio-unmute-prompt">
+        <div>
+            <span>是否解除静音?</span>
+            <button id="unmute-btn">✔</button>
+            <button id="dismiss-btn">✘</button>
         </div>
     </div>
     <div id="unity-container">
-        <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
-        <div id="unity-loading-bar" style="width:100%;text-align:center;">
-            <div id="unity-logo" style="margin:auto;"></div>
+        <canvas id="unity-canvas" width="960" height="600" tabindex="-1"></canvas>
+        <div id="unity-loading-bar">
+            <div id="unity-logo"></div>
             <div id="unity-progress-bar-empty">
                 <div id="unity-progress-bar-full"></div>
             </div>
-            <div id="Tip_FirstLoading" style="color:#fff;font-size:2vw;text-align:center;width:100%;height:30px;line-height:30px;margin-top:0.5vw">数据正在加载...</div>
+            <div id="Tip_FirstLoading">数据正在加载...</div>
         </div>
-        <div id="unity-warning"> </div>
+        <div id="unity-warning"></div>
     </div>
-    <style>
-        /* 消失动画 */
-        
-        @keyframes FadeOut {
-            0% {
-                opacity: 1;
-                display: block;
-            }
-            80% {
-                opacity: 1;
-                display: block;
-            }
-            100% {
-                opacity: 0;
-                display: none;
-            }
-        }
-    </style>
+
     <script>
         /**
          * 播放CSS动画函数
@@ -149,6 +132,11 @@
             }
         }
 
+        // 全局函数：Unity调用此函数显示音频静音提示（当需要播放音频时）
+        window.ShowAudioUnmutePrompt = function() {
+            showUnmutePrompt();
+        };
+
         // 监听用户交互
         function setupUserInteractionListeners() {
             // 监听任何用户交互
@@ -192,9 +180,9 @@
             initAudioContext();
             setupUserInteractionListeners();
 
-            // 测试：立即显示提示框（用于调试）
+            // 初始化完成，准备好响应Unity的音频播放请求
             console.log('[Audio] 页面加载完成，音频功能已初始化');
-            setTimeout(() => showUnmutePrompt(), 2000); // 调试用：2秒后显示
+            // 移除调试代码，改为按需显示策略
 
             if ("serviceWorker" in navigator) {
                 navigator.serviceWorker.register("ServiceWorker.js").then(function(registration) {
@@ -228,9 +216,9 @@
             var div = document.createElement('div');
             div.innerHTML = msg;
             warningBanner.appendChild(div);
-            if (type == 'error') div.style = 'background: red; padding: 10px;';
+            if (type == 'error') div.className = 'unity-banner-error';
             else {
-                if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+                if (type == 'warning') div.className = 'unity-banner-warning';
                 setTimeout(function() {
                     warningBanner.removeChild(div);
                     updateBannerVisibility();
@@ -288,10 +276,8 @@
                         console.log('已成功删除封面元素');
                     }
 
-                    // 封面动画结束后，显示音频静音提示
-                    setTimeout(function() {
-                        showUnmutePrompt();
-                    }, 1000); // 延迟1秒显示，避免与封面重叠
+                    // Unity实例已准备好，等待音频播放请求
+                    console.log('[Audio] Unity实例创建完成，等待音频播放请求');
                 });
 
             }).catch((message) => {
