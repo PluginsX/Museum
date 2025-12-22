@@ -1,19 +1,23 @@
-﻿Shader "Museum/UI/roundedSqaure"
+Shader "Museum/UI/roundedSqaure_Billboard"
 {
     Properties
     {
-        // -------------------------- 核心属性 --------------------------
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
         _Color ("Tint", Color) = (1,1,1,1)
         
-        // -------------------------- 圆角控制 (无需脚本) --------------------------
-        // 四个角独立半径（像素）
-        _RadiusTL ("Top Left Radius (Pixels)", Float) = 20
-        _RadiusTR ("Top Right Radius (Pixels)", Float) = 20
-        _RadiusBR ("Bottom Right Radius (Pixels)", Float) = 20
-        _RadiusBL ("Bottom Left Radius (Pixels)", Float) = 20
-        _BorderWidth ("Border Width (Pixels)", Float) = 0
+        // -------------------------- 形状参数 (像素单位) --------------------------
+        _RadiusTL ("Top Left Radius", Float) = 20
+        _RadiusTR ("Top Right Radius", Float) = 20
+        _RadiusBR ("Bottom Right Radius", Float) = 20
+        _RadiusBL ("Bottom Left Radius", Float) = 20
+        
+        // 描边 (向内生长)
+        _BorderWidth ("Border Width", Float) = 0
         _BorderColor ("Border Color", Color) = (1,1,1,1)
+        
+        // -------------------------- 3D 遮挡设置 --------------------------
+        // LEqual(4) = 被模型遮挡, Always(8) = 透视显示
+        [Enum(UnityEngine.Rendering.CompareFunction)] _ZTest ("Z Test", Float) = 4 
         
         // -------------------------- UGUI 标准属性 --------------------------
         _StencilComp ("Stencil Comparison", Float) = 8
@@ -21,16 +25,12 @@
         _StencilOp ("Stencil Operation", Float) = 0
         _StencilWriteMask ("Stencil Write Mask", Float) = 255
         _StencilReadMask ("Stencil Read Mask", Float) = 255
-        
         _ColorMask ("Color Mask", Float) = 15
         [HideInInspector] _ClipRect ("Clip Rect", Vector) = (-32767, -32767, 32767, 32767)
-        
         [Enum(UnityEngine.Rendering.BlendMode)] _BlendSrc ("Blend Src", Float) = 5 
         [Enum(UnityEngine.Rendering.BlendMode)] _BlendDst ("Blend Dst", Float) = 10 
-        [Enum(UnityEngine.Rendering.CompareFunction)] _ZTest ("Z Test", Float) = 4 
         [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull Mode", Float) = 0 
         [Enum(UnityEngine.Rendering.CompareFunction)] _ZWrite ("Z Write", Float) = 0 
-        
         [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
     }
     
@@ -64,13 +64,15 @@
         
         Pass
         {
-            Name "WorldPosVisualizer_Rounded_UV"
-            Tags { "LightMode" = "Universal2D" }
+            Name "UI_Rounded_DataDriven_Perfect"
+            Tags { "LightMode" = "UniversalForward" } 
             
-            CGPROGRAM
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma target 3.0 // 需要3.0以支持更好的导数计算
+            #pragma target 3.0
+            
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             
             #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
             #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
@@ -80,37 +82,26 @@
                 float4 vertex   : POSITION;
                 float4 color    : COLOR;
                 float2 texcoord : TEXCOORD0;
+                float2 uv1      : TEXCOORD1; // 接收 HalfSize
             };
             
             struct v2f
             {
                 float4 vertex   : SV_POSITION;
-                fixed4 color    : COLOR;
+                half4 color    : COLOR;
                 float2 texcoord : TEXCOORD0;
                 float4 worldPosition : TEXCOORD1;
+                nointerpolation float2 uiSizeData : TEXCOORD3; 
             };
             
             sampler2D _MainTex;
             float4 _MainTex_ST;
-            fixed4 _Color;
+            half4 _Color;
             float4 _ClipRect;
             
-            float _RadiusTL;
-            float _RadiusTR;
-            float _RadiusBR;
-            float _RadiusBL;
+            float _RadiusTL, _RadiusTR, _RadiusBR, _RadiusBL;
             float _BorderWidth;
             float4 _BorderColor;
-            
-            float4 TransformObjectToClipPos(float3 pos)
-            {
-                float4x4 modelMatrix = unity_ObjectToWorld;
-                float4x4 viewMatrix = UNITY_MATRIX_V;
-                float4x4 projectionMatrix = UNITY_MATRIX_P;
-                float4 worldPos = mul(modelMatrix, float4(pos, 1.0));
-                float4 viewPos = mul(viewMatrix, worldPos);
-                return mul(projectionMatrix, viewPos);
-            }
             
             inline float UnityGet2DClipping(float2 position, float4 clipRect)
             {
@@ -118,7 +109,6 @@
                 return inside.x * inside.y;
             }
             
-            // SDF 矩形计算
             float RoundedRectSDF(float2 pos, float2 halfSize, float radius)
             {
                 radius = min(radius, min(halfSize.x, halfSize.y));
@@ -129,69 +119,84 @@
             v2f vert(appdata_t v)
             {
                 v2f o;
-                float4 worldPos = mul(unity_ObjectToWorld, v.vertex);
-                o.worldPosition = worldPos;
-                o.vertex = TransformObjectToClipPos(v.vertex.xyz);
-                o.texcoord = v.texcoord * _MainTex_ST.xy + _MainTex_ST.zw;
+                VertexPositionInputs vertexInput = GetVertexPositionInputs(v.vertex.xyz);
+                o.worldPosition = float4(vertexInput.positionWS, 1.0);
+                o.vertex = vertexInput.positionCS;
+                
+                o.texcoord = v.texcoord;
                 o.color = v.color * _Color;
+                
+                // 从 C# 获取尺寸
+                float2 size = v.uv1;
+                if (length(size) < 0.001) size = float2(50, 50); 
+                o.uiSizeData = size;
+                
                 return o;
             }
             
-            fixed4 frag(v2f i) : SV_Target
+            half4 frag(v2f i) : SV_Target
             {
-                half4 texColor = tex2D(_MainTex, i.texcoord);
+                float2 uv = i.texcoord * _MainTex_ST.xy + _MainTex_ST.zw;
                 
-                float3 baseColor = texColor.rgb * i.color.rgb;
-                float baseAlpha = texColor.a * i.color.a;
+                // 1. 获取物理尺寸
+                float2 halfSize = i.uiSizeData;
+                float2 rectSize = halfSize * 2.0;
+                
+                // 2. 计算像素坐标 (相对于中心)
+                float2 pixelPos = (uv - 0.5) * rectSize;
                 
                 // ----------------------------------------------------
-                // 2. 无脚本圆角逻辑 (基于 UV 导数)
+                // 【核心修复】 内缩 (Padding) 逻辑
                 // ----------------------------------------------------
+                // 计算当前视角下，屏幕 1 像素对应的物理单位大小
+                // fwidth(pixelPos.x) = ddx + ddy 的近似值
+                float screenPixelSize = fwidth(pixelPos.x);
                 
-                // 计算 UV 的变化率 (ddx, ddy) 和 世界坐标的变化率
-                // fwidth = abs(ddx) + abs(ddy)
-                float2 uvDeriv = fwidth(i.texcoord);
-                float2 posDeriv = float2(length(fwidth(i.worldPosition.x)), length(fwidth(i.worldPosition.y)));
+                // 我们需要向内收缩大约 0.5 到 1.0 个屏幕像素的距离
+                // 这样抗锯齿产生的“虚边”才能落在 Mesh 网格内部，而不是被切掉
+                float padding = max(screenPixelSize, 0.001) * 0.5;
                 
-                // 避免除以0 (极少数情况下可能发生)
-                uvDeriv = max(uvDeriv, 0.00001);
-                
-                // 计算 UI 实际尺寸 (Size = dPos / dUV)
-                // 假设 UV X轴 对应 世界 X轴 (常规 UI 布局)
-                float2 rectSize = posDeriv / uvDeriv;
-                
-                // 基于 UV 计算像素位置
-                // (i.texcoord - 0.5) 将 UV 中心移到 (0,0)
-                // * rectSize 将其放大到实际世界尺寸
-                float2 pixelPos = (i.texcoord - 0.5) * rectSize;
-                
-                float2 halfSize = rectSize * 0.5;
-                
-                float4 finalColor = float4(baseColor, baseAlpha);
+                // 使用收缩后的尺寸计算形状
+                float2 safeHalfSize = halfSize - padding;
+                // ----------------------------------------------------
                 
                 float isRight = step(0.0, pixelPos.x);
                 float isTop = step(0.0, pixelPos.y);
                 float topRadius = lerp(_RadiusTL, _RadiusTR, isRight);
                 float bottomRadius = lerp(_RadiusBL, _RadiusBR, isRight);
                 float cornerRadius = lerp(bottomRadius, topRadius, isTop);
-                float maxRadius = min(halfSize.x, halfSize.y);
-                cornerRadius = clamp(cornerRadius, 0.0, maxRadius);
-                float dist = RoundedRectSDF(pixelPos, halfSize, cornerRadius);
-                float aa = max(fwidth(dist), 0.0005);
-                float fillMask = saturate(1.0 - smoothstep(-aa, aa, dist));
-                finalColor *= fillMask;
                 
-                if (_BorderWidth > 0.0)
-                {
-                    float innerMask = saturate(1.0 - smoothstep(-aa, aa, dist + _BorderWidth));
-                    float borderMask = saturate(fillMask - innerMask);
-                    float3 borderColor = _BorderColor.rgb;
-                    float borderAlpha = _BorderColor.a * i.color.a;
-                    finalColor.rgb = lerp(finalColor.rgb, borderColor, borderMask);
-                    finalColor.a = lerp(finalColor.a, borderAlpha * borderMask, borderMask);
-                }
+                // 确保内缩后圆角不为负
+                cornerRadius = max(cornerRadius - padding, 0.0);
                 
-                // ----------------------------------------------------
+                // 3. 计算 SDF
+                float dist = RoundedRectSDF(pixelPos, safeHalfSize, cornerRadius);
+                
+                // 4. 颜色与混合
+                half4 mainTexColor = tex2D(_MainTex, uv);
+                half3 bodyRGB = mainTexColor.rgb * i.color.rgb;
+                float bodyAlpha = mainTexColor.a * i.color.a;
+                
+                half3 borderRGB = _BorderColor.rgb;
+                float borderAlpha = _BorderColor.a * i.color.a;
+                
+                // 抗锯齿阈值 (使用之前的 screenPixelSize)
+                float aa = max(screenPixelSize, 0.001); 
+                
+                // 整体外轮廓
+                float shapeAlpha = 1.0 - smoothstep(-aa, aa, dist);
+                
+                // 独立描边区域判断
+                float innerFactor = 1.0 - smoothstep(-aa, aa, dist + _BorderWidth);
+                if (_BorderWidth <= 0.0) innerFactor = 1.0;
+                
+                // 颜色混合 (边缘用描边色，内部用底色)
+                half3 finalRGB = lerp(borderRGB, bodyRGB, innerFactor);
+                float finalAlpha = lerp(borderAlpha, bodyAlpha, innerFactor);
+                
+                finalAlpha *= shapeAlpha;
+                
+                half4 finalColor = half4(finalRGB, finalAlpha);
                 
                 #ifdef UNITY_UI_CLIP_RECT
                 finalColor.a *= UnityGet2DClipping(i.worldPosition.xy, _ClipRect);
@@ -203,7 +208,7 @@
                 
                 return finalColor;
             }
-            ENDCG
+            ENDHLSL
         }
     }
     FallBack "UI/Default"
