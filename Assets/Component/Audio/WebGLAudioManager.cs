@@ -35,8 +35,23 @@ public class WebGLAudioManager : MonoBehaviour
     [Tooltip("是否循环播放音频（默认：false）")]
     public bool isLoop = false;
 
-    [Tooltip("唤醒时自动播放音频（默认：true；受浏览器自动播放策略限制）")]
-    public bool playOnAwake = true;
+    [Tooltip("启用时自动播放音频（默认：true；每次从禁用变为启用都会播放）")]
+    public bool playOnEnable = true;
+
+    /// <summary>
+    /// 编辑器验证：实时同步playOnEnable设置到AudioSource组件
+    /// </summary>
+    private void OnValidate()
+    {
+        // 在编辑器中获取AudioSource组件引用
+        AudioSource audioSource = GetComponent<AudioSource>();
+        if (audioSource != null)
+        {
+            // 实时同步我们的选项到AudioSource的playOnAwake属性
+            // 注意：这里使用playOnEnable的值，因为AudioSource的playOnAwake在我们的组件中被重新定义了含义
+            audioSource.playOnAwake = playOnEnable;
+        }
+    }
 
     [Header("事件")]
     public UnityEvent<string> onAudioEnded;
@@ -47,6 +62,7 @@ public class WebGLAudioManager : MonoBehaviour
     private IAudioBackend _backend;
     private bool _useWebGlBackend;
     private static bool _hasShownUnmutePrompt;
+    private bool _isInitialized;
 
     private string DefaultAudioKey => string.IsNullOrEmpty(audioFileName) ? "default_audio" : audioFileName;
     internal AudioSource UnityAudioSource => _audioSource;
@@ -69,6 +85,7 @@ public class WebGLAudioManager : MonoBehaviour
     #region Unity生命周期
     private void Awake()
     {
+        // 处理单例模式
         if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
@@ -85,20 +102,23 @@ public class WebGLAudioManager : MonoBehaviour
             Log.Print("Audio", "warn", "WebGLAudioManager未挂在根节点，已跳过DontDestroyOnLoad。");
         }
 
-        if (!TryGetComponent(out _audioSource))
+        // 如果对象一开始就是激活的，进行初始化
+        if (gameObject.activeSelf)
         {
-            Log.Print("Audio", "error", "缺少AudioSource组件，无法构建音频管理器。");
-            enabled = false;
-            return;
+            InitializeAudioManager();
+        }
+    }
+
+    private void OnEnable()
+    {
+        // 如果还没有初始化，进行延迟初始化
+        if (!_isInitialized && Instance == this)
+        {
+            InitializeAudioManager();
         }
 
-        _audioSource.playOnAwake = false;
-
-        _useWebGlBackend = ShouldUseWebGlBackend();
-        _backend = _useWebGlBackend ? (IAudioBackend)new WebGlJsBackend() : new AudioSourceBackend();
-        _backend.Initialize(this);
-
-        if (playOnAwake)
+        // 每次启用时，如果设置了启用时播放，就自动播放
+        if (playOnEnable && Instance == this)
         {
             PlayCurrentAudio();
         }
@@ -119,6 +139,50 @@ public class WebGLAudioManager : MonoBehaviour
         _backend?.Destroy(DefaultAudioKey);
         _backend?.Dispose();
         _backend = null;
+        _isInitialized = false;
+    }
+    #endregion
+
+    #region 初始化逻辑
+    /// <summary>
+    /// 初始化音频管理器核心组件
+    /// </summary>
+    private void InitializeAudioManager()
+    {
+        if (_isInitialized) return;
+
+        if (!TryGetComponent(out _audioSource))
+        {
+            Log.Print("Audio", "error", "缺少AudioSource组件，无法构建音频管理器。");
+            enabled = false;
+            return;
+        }
+
+        _audioSource.playOnAwake = false;
+
+        _useWebGlBackend = ShouldUseWebGlBackend();
+        _backend = _useWebGlBackend ? (IAudioBackend)new WebGlJsBackend() : new AudioSourceBackend();
+        _backend.Initialize(this);
+
+        _isInitialized = true;
+        Log.Print("Audio", "debug", $"音频管理器初始化完成，使用{(_useWebGlBackend ? "WebGL" : "Unity")}后端。");
+    }
+
+    /// <summary>
+    /// 确保音频管理器已初始化（延迟初始化）
+    /// </summary>
+    private void EnsureInitialized()
+    {
+        if (!_isInitialized && Instance == this)
+        {
+            InitializeAudioManager();
+
+            // 延迟初始化的情况下，如果设置了启用时播放，现在播放
+            if (playOnEnable)
+            {
+                PlayCurrentAudio();
+            }
+        }
     }
     #endregion
 
@@ -128,9 +192,12 @@ public class WebGLAudioManager : MonoBehaviour
     /// </summary>
     public void PlayAudio(string fileName, bool? loopOverride = null, string audioKey = null)
     {
+        // 确保已初始化
+        EnsureInitialized();
+
         if (_backend == null)
         {
-            Log.Print("Audio", "error", "音频播放后端尚未初始化。");
+            Log.Print("Audio", "error", "音频播放后端初始化失败。");
             return;
         }
 
@@ -152,6 +219,9 @@ public class WebGLAudioManager : MonoBehaviour
     /// </summary>
     public void PlayCurrentAudio()
     {
+        // 确保已初始化
+        EnsureInitialized();
+
         if (_useWebGlBackend && string.IsNullOrEmpty(audioFileName))
         {
             Log.Print("Audio", "error", "当前音频文件名未设置，无法在WebGL上播放。");
@@ -163,37 +233,44 @@ public class WebGLAudioManager : MonoBehaviour
 
     public void PauseAudio()
     {
+        EnsureInitialized();
         _backend?.Pause(DefaultAudioKey);
     }
 
     public void StopAudio()
     {
+        EnsureInitialized();
         _backend?.Stop(DefaultAudioKey);
     }
 
     public void DestroyAudio()
     {
+        EnsureInitialized();
         _backend?.Destroy(DefaultAudioKey);
     }
 
     public float GetAudioProgress()
     {
+        EnsureInitialized();
         return _backend?.GetProgress(DefaultAudioKey) ?? 0f;
     }
 
     public void SetAudioVolume(float volume)
     {
+        EnsureInitialized();
         float clamped = Mathf.Clamp01(volume);
         _backend?.SetVolume(DefaultAudioKey, clamped);
     }
 
     public float GetAudioVolume()
     {
+        EnsureInitialized();
         return _backend?.GetVolume(DefaultAudioKey) ?? 1f;
     }
 
     public void SeekAudio(float progress)
     {
+        EnsureInitialized();
         float clamped = Mathf.Clamp01(progress);
         _backend?.Seek(DefaultAudioKey, clamped);
     }

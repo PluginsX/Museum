@@ -25,4 +25,8 @@ MonoBehaviour:
     isEnabled: 0
   - MarkName: Video
     isEnabled: 0
-  autoAddNewMarks: 0
+  - MarkName: Audio
+    isEnabled: 1
+  - MarkName: Web
+    isEnabled: 1
+  autoAddNewMarks: 1

@@ -19,6 +19,11 @@ public class WebGLVideoPlayer : MonoBehaviour
     public string videoFileName = "test.mp4";
     // 固定目录：StreamingAssets/Video/（无需修改，对应你的目录）
     public string videoFolder = "Video/";
+
+    // 唤醒时播放选项（同步VideoPlayer的playOnAwake）
+    [Header("播放控制")]
+    [Tooltip("唤醒时播放")]
+    public bool playOnAwake = false;
     #endregion
 
     #region 事件委托
@@ -49,7 +54,7 @@ public class WebGLVideoPlayer : MonoBehaviour
         rawImage = GetComponent<RawImage>();
 
         // 初始化VideoPlayer：渲染到RawImage的RenderTexture
-        videoPlayer.playOnAwake = false;
+        videoPlayer.playOnAwake = playOnAwake;
         videoPlayer.renderMode = VideoRenderMode.RenderTexture;
         // 创建RenderTexture（分辨率可根据视频调整，这里以1920*1080为例）
         videoPlayer.targetTexture = new RenderTexture(1920, 1080, 0);
@@ -63,18 +68,36 @@ public class WebGLVideoPlayer : MonoBehaviour
         if (!string.IsNullOrEmpty(videoPath))
         {
             videoPlayer.url = videoPath;
-            // 预加载并播放视频
+            // 预加载视频
             videoPlayer.Prepare();
             videoPlayer.prepareCompleted += (source) =>
             {
-                videoPlayer.Play();
-                Log.Print("Video", "debug", $"视频开始播放：{videoPath}");
+                // 如果设置了唤醒时播放，则自动播放
+                if (playOnAwake)
+                {
+                    videoPlayer.Play();
+                    Log.Print("Video", "debug", $"视频唤醒时自动播放：{videoPath}");
+                }
                 onPrepared?.Invoke(); // 触发准备完成事件
             };
         }
         else
         {
             Log.Print("Video", "error", "视频路径为空或文件不存在！");
+        }
+    }
+
+    /// <summary>
+    /// 编辑器验证：实时同步playOnAwake设置到VideoPlayer组件
+    /// </summary>
+    private void OnValidate()
+    {
+        // 在编辑器中获取VideoPlayer组件引用
+        VideoPlayer vp = GetComponent<VideoPlayer>();
+        if (vp != null)
+        {
+            // 实时同步我们的选项到VideoPlayer的playOnAwake属性
+            vp.playOnAwake = playOnAwake;
         }
     }
 

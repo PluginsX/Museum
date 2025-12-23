@@ -100,7 +100,6 @@ public class PlayableDirectorController : MonoBehaviour
 
     void Awake()
     {
-        hasAwakened = true;
     }
 
     void Start()
@@ -112,8 +111,6 @@ public class PlayableDirectorController : MonoBehaviour
             Play();
         }
     }
-
-    private bool hasAwakened = false;
 
     private void InitializeDirector()
     {
