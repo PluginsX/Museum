@@ -38,6 +38,14 @@ public class InputHandler : MonoBehaviour
     [Tooltip("缩放动作输入轴值的乘数,可用于控制方")]
     public float zoomMultiple = -1f;
 
+    [Header("双指手势设置")]
+    [Tooltip("缩放触发的最小距离变化阈值(像素)")]
+    public float scaleThreshold = 50f;
+    [Tooltip("平移触发的最小距离阈值(像素)")]
+    public float panThreshold = 20f;
+    [Tooltip("缩放因子归一化除数")]
+    public float scaleNormalization = 100f;
+
     [Header("事件绑定")]
     public Vector2Event OnClick;                     // 点击位置
     public Vector2Vector2Event OnRotate;             // 当前位置, 上一位置
@@ -342,13 +350,25 @@ public class InputHandler : MonoBehaviour
 
                         if (phase == UnityEngine.InputSystem.TouchPhase.Moved && OnTurnPress)
                         {
-                            // 检查是否超过最小拖动距
-                            if (Vector2.Distance(primaryTouchStartPos, position) > dragMinDistance)
+                            // 如果last_Touch_Pos不是primaryTouchStartPos，说明是从双指切换过来的，重置位置避免瞬间旋转
+                            if (last_Touch_Pos != primaryTouchStartPos)
                             {
-                                OnRotate.Invoke(last_Touch_Pos, position);
+                                // 从双指切换到单指，重置位置基准，不触发旋转
                                 last_Touch_Pos = position;
+                                primaryTouchStartPos = position;
 
-                                if (debugMode) Log.Print("Input", "Debug", $"触摸旋转: {position}");
+                                if (debugMode) Log.Print("Input", "Debug", $"从双指切换到单指，重置旋转基准: {position}");
+                            }
+                            else
+                            {
+                                // 检查是否超过最小拖动距
+                                if (Vector2.Distance(primaryTouchStartPos, position) > dragMinDistance)
+                                {
+                                    OnRotate.Invoke(last_Touch_Pos, position);
+                                    last_Touch_Pos = position;
+
+                                    if (debugMode) Log.Print("Input", "Debug", $"触摸旋转: {position}");
+                                }
                             }
                         }
                         else if (phase == UnityEngine.InputSystem.TouchPhase.Ended ||
@@ -424,24 +444,29 @@ public class InputHandler : MonoBehaviour
                 else if ((touch1Id == primaryTouchId && touch2Id == secondaryTouchId) ||
                          (touch1Id == secondaryTouchId && touch2Id == primaryTouchId))
                 {
-                    // 计算当前距离和中
+                    // 计算当前距离和中点
                     Vector2 pos1 = touch1.position.ReadValue();
                     Vector2 pos2 = touch2.position.ReadValue();
                     float currentDistance = Vector2.Distance(pos1, pos2);
                     Vector2 currentMidpoint = (pos1 + pos2) / 2f;
 
-                    // 处理缩放
-                    float DeltaDistance = currentDistance - initialTouchDistance;
-                    float scaleFactor = DeltaDistance > 0 ? -1 : (DeltaDistance < 0 ? 1 : 0);
-                    // 触发缩放事件
-                    OnScale.Invoke(scaleFactor);
-                    if (debugMode) Log.Print("Input", "Debug", $"触摸:双指缩放: {scaleFactor}");
+                    // 计算距离和平移变化
+                    float distanceDelta = currentDistance - initialTouchDistance;
+                    float panDelta = Vector2.Distance(currentMidpoint, last_Touch_Pos);
 
-                    // 更新双指间距
-                    initialTouchDistance = currentDistance;
+                    // 处理缩放（带阈值和连续因子）
+                    if (Mathf.Abs(distanceDelta) > scaleThreshold)
+                    {
+                        float scaleFactor = - (distanceDelta / scaleNormalization);
+                        OnScale.Invoke(scaleFactor);
+                        if (debugMode) Log.Print("Input", "Debug", $"触摸:双指缩放: {scaleFactor}");
 
-                    // 处理平移
-                    if (currentMidpoint != last_Touch_Pos)
+                        // 只在缩放完成后更新基准，避免连续操作时的基准漂移
+                        initialTouchDistance = currentDistance;
+                    }
+
+                    // 处理平移（带阈值）
+                    if (panDelta > panThreshold)
                     {
                         OnMove.Invoke(last_Touch_Pos, currentMidpoint);
                         last_Touch_Pos = currentMidpoint;

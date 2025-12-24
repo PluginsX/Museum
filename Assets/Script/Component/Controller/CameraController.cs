@@ -19,7 +19,7 @@ public class CameraController : MonoBehaviour
     [Header("缩放设置")]
     public float minCameraDistance = 0.2f;
     public float maxCameraDistance = 1f;
-    public float zoomStepRatio = 0.3f;
+    public float zoomStepRatio = -0.3f;
     public float zoomLerpSpeed = 5f;
 
     [Header("平移设置")]
