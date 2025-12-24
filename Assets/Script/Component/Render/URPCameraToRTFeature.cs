@@ -12,19 +12,38 @@ public class URPCameraToRTFeature : ScriptableRendererFeature
         private RTHandle _targetRTHandle; // 目标RT的句柄
         private readonly string _profilerTag = "CameraToRT";
         private RenderTexture _targetRT; // 外部传入的RenderTexture
+        private RenderTexture _currentRT; // 当前已处理的RT，避免重复创建
 
         // 初始化目标RT
         public void Setup(RenderTexture targetRT)
         {
+            // 如果RT没有改变，跳过重新创建
+            if (_targetRT == targetRT && _targetRTHandle != null)
+                return;
+
             _targetRT = targetRT;
-            // 创建RTHandle（适配URP新接口）
-            if (_targetRT != null && _targetRT.IsCreated())
+
+            if (_targetRT == null)
             {
-                _targetRTHandle = RTHandles.Alloc(
-                    _targetRT,
-                    name: "TargetRT_Handle"
-                );
+                Debug.LogWarning("[URPCameraToRTFeature] TargetRT is null");
+                _currentRT = null;
+                return;
             }
+
+            // 释放旧的RTHandle
+            if (_targetRTHandle != null)
+            {
+                _targetRTHandle.Release();
+                _targetRTHandle = null;
+            }
+
+            // 创建RTHandle（依赖外部RT已正确配置）
+            _targetRTHandle = RTHandles.Alloc(
+                _targetRT,
+                name: "TargetRT_Handle"
+            );
+
+            _currentRT = _targetRT;
         }
 
         // 摄像机初始化时获取颜色目标句柄
@@ -38,13 +57,13 @@ public class URPCameraToRTFeature : ScriptableRendererFeature
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
             // 校验RT有效性
-            if (_targetRT == null || !_targetRT.IsCreated() || _targetRTHandle == null) 
+            if (_targetRT == null || _targetRTHandle == null)
                 return;
 
             CommandBuffer cmd = CommandBufferPool.Get(_profilerTag);
-            
-            // 替换过时的 Blit → 使用URP兼容的Blit（支持RTHandle）
-            Blitter.BlitCameraTexture(cmd, _cameraColorTargetHandle, _targetRTHandle, Vector2.one, 0);
+
+            // 使用标准的Blit命令，确保URP兼容性
+            cmd.Blit(_cameraColorTargetHandle.nameID, _targetRTHandle.nameID);
 
             // 执行并释放命令缓冲区
             context.ExecuteCommandBuffer(cmd);
